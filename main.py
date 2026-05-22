@@ -96,7 +96,12 @@ def generate_plotly_figure(outputs, variant, selected_tracks, track_map, interva
                     "type": "continuous"
                 })
         # For splice junctions: ONE subplot for all junctions in this track
-        else:
+        elif track_name == "SPLICE_JUNCTIONS":
+            #check if there are junctions.
+            ref_junctions = getattr(ref_data, 'junctions', [])
+            alt_junctions = getattr(alt_data, 'junctions', [])
+            if ref_junctions.shape[0] < 1 and alt_junctions.shape[0] < 1:
+                continue
             for i in range(ref_data.values.shape[1]):
                 metadata = ref_data.metadata.iloc[i]
                 subplot_specs.append({
@@ -106,8 +111,9 @@ def generate_plotly_figure(outputs, variant, selected_tracks, track_map, interva
                     "metadata": metadata,
                     "type": "sashimi"
                 })
+        else:
+            continue
                 
-
     if not subplot_specs:
         raise ValueError("No valid tracks to plot.")
     
@@ -190,7 +196,7 @@ def generate_plotly_figure(outputs, variant, selected_tracks, track_map, interva
                 acceptor = interval.end
                 strand = getattr(interval, 'strand', '+')
                 count = count[0]  # Use the float value directly
-                if count < 0.05:
+                if count < 0.005:
                     continue
                 sign = 1 if strand == "+" else -1
                 height = np.log(count + 1) * 40  # Works with floats
@@ -235,7 +241,7 @@ def generate_plotly_figure(outputs, variant, selected_tracks, track_map, interva
                 acceptor = interval.end
                 strand = getattr(interval, 'strand', '+')
                 count = count[0]  # Use the float value directly
-                if count < 0.05:
+                if count < 0.005:
                     continue
                 sign = 1 if strand == "+" else -1
                 height = np.log(count + 1) * 40
