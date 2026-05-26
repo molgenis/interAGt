@@ -96,24 +96,22 @@ TOOLS: List[Dict[str, Any]] = [
     }
 ]
 
-# -------------------------------
-# Actual Python implementations
-# -------------------------------
+
+def get_effect_range(raw_score: float) -> str:
+    if abs(raw_score) < 0.1:
+        return "no or low effect"
+    elif 0.1 < abs(raw_score) < 0.2:
+        return "low effect"
+    elif 0.2 < abs(raw_score) < 0.4:
+        return "moderate effect"
+    elif abs(raw_score) >= 0.4:
+        return "high effect"
+
 def get_ag_scores(ag_dataframe: pd.DataFrame | Dict[str, Any]) -> str:
     """
-    Generate a flat text summary of the most important variant scores from an AlphaGenome DataFrame.
-    Handles both DataFrame and dict inputs (for LLM tool-calling).
-
-    Args:
-        ag_dataframe: DataFrame or dict with columns:
-            - gene_name
-            - output_type (e.g., RNA_SEQ, ATAC)
-            - biosample_name (tissue)
-            - raw_score
-            - quantile_score
-
-    Returns:
-        str: Flat text summarizing top variant effects, one line per (gene, output_type, tissue) combo.
+    Generate a flat text summary of variant scores, split into:
+    - Gene-linked tracks (RNA-seq, Splicing, CAGE)
+    - Regulatory tracks (ATAC, CHIP, DNASE, etc.)
     """
     if isinstance(ag_dataframe, dict):
         ag_dataframe = pd.DataFrame(ag_dataframe)
@@ -121,21 +119,44 @@ def get_ag_scores(ag_dataframe: pd.DataFrame | Dict[str, Any]) -> str:
     if ag_dataframe.empty:
         return "No variant scores found."
 
-    # Sort by absolute raw_score (most impactful first)
-    ag_sorted = ag_dataframe.copy()
-    ag_sorted['abs_score'] = ag_sorted['raw_score'].abs()
-    ag_sorted = ag_sorted.sort_values('abs_score', ascending=False)
+    # Define track categories
+    GENE_LINKED_TYPES = {'RNA_SEQ', 'SPLICE_JUNCTIONS', 'CAGE'}
+    REGULATORY_TYPES = {'ATAC', 'CHIP_TF', 'CHIP_HISTONE', 'DNASE', 'PROCAP'}
 
-    # Build flat text output
+    def get_category(output_type):
+        if output_type in GENE_LINKED_TYPES:
+            return "Gene-linked"
+        elif output_type in REGULATORY_TYPES:
+            return "Regulatory"
+        return "Other"
+
+    # Add category and sort
+    ag_sorted = ag_dataframe.copy()
+    ag_sorted['track_category'] = ag_sorted['output_type'].apply(get_category)
+    ag_sorted['abs_score'] = ag_sorted['raw_score'].abs()
+
+    # Sort: Gene-linked first, then Regulatory, then by score
+    category_order = {'Gene-linked': 0, 'Regulatory': 1, 'Other': 2}
+    ag_sorted['category_rank'] = ag_sorted['track_category'].map(category_order)
+    ag_sorted = ag_sorted.sort_values(['category_rank', 'abs_score'], ascending=[True, False])
+
+    # Build output with section headers
     output_lines = []
+    current_category = None
+
     for _, row in ag_sorted.iterrows():
+        if row['track_category'] != current_category:
+            current_category = row['track_category']
+            output_lines.append(f"\n--- {current_category} tracks ---")
+
         effect = "increased" if row['raw_score'] > 0 else "decreased"
+        score_effect_text = get_effect_range(row['raw_score'])
+        gene_part = f"{row['gene_name']} | " if pd.notna(row['gene_name']) else ""
         output_lines.append(
-            f"{row['gene_name']} | {row['output_type']} | {row['biosample_name']} | "
-            f"{effect} | score: {row['raw_score']:.2f} | quantile: {row['quantile_score']:.2%}"
+            f"{gene_part}{row['output_type']} | {row['biosample_name']} | "
+            f"{effect} | score: {row['raw_score']:.2f} | quantile: {row['quantile_score']:.2%} | {score_effect_text}"
         )
 
-    # Join all lines with newlines
     return "\n".join(output_lines)
 
 def get_article_info(term: str) -> str:
