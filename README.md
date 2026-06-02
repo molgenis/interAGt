@@ -44,7 +44,7 @@ We recommend to do this in a venv/conda/mamba environment.
 
 ```bash
 pip install --upgrade pip
-pip install streamlit plotly numpy alphagenome
+pip install streamlit plotly numpy alphagenome biopython openai
 ```
 
 ### **4. Run a streamlit server**

@@ -463,7 +463,9 @@ if st.session_state.var_df is not None:
     )
 
     # Button to trigger LLM analysis
-    if st.button("Ask AI to analyze"):
+    st.info("**Experimental**: The 'Ask AI to analyze results' function uses a local LLM (QWEN3-4B instruct) to analyse the summary from the results that were selected.\n"
+            "The LLM makes 'tool calls' to retrieve information from NCBI gene info and abstracts from articles.")
+    if st.button("Ask AI to analyze results"):
         with st.spinner("Thinking..."):
             try:
                 variant_split = variant_str.split(":")
@@ -481,10 +483,8 @@ if st.session_state.var_df is not None:
                 ref nucleotide {variant_split[2]}
                 alt nucleotide {variant_split[3]}
 
-                Variant scores (top 3 for all output types combined):
+                Variant scores:
                 {ag_scores_text}
-
-                Please note that the (top 3) most affected tissues are not nescessary the tissues involved in the disease. 
 
                 Also consider:
                 - Which genes are most affected?

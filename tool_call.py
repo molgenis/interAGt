@@ -153,7 +153,7 @@ def get_ag_scores(ag_dataframe: pd.DataFrame | Dict[str, Any]) -> str:
         score_effect_text = get_effect_range(row['raw_score'])
         gene_part = f"{row['gene_name']} | " if pd.notna(row['gene_name']) else ""
         output_lines.append(
-            f"{gene_part}{row['output_type']} | {row['biosample_name']} | "
+            f"{gene_part}{row['output_type']}| "
             f"{effect} | score: {row['raw_score']:.2f} | quantile: {row['quantile_score']:.2%} | {score_effect_text}"
         )
 
@@ -343,7 +343,7 @@ SYSTEM_PROMPT = dedent("""
                        
     !VERY IMPORTANT!:
     - WHEN USING PubMed abstracts, name the PMID's USED.
-                       
+                    
     AlphaGenome raw scores under 0.1 predict NO to LOW effect. Scores above 0.1 predict a MILD effect,
     Scores Between 0.3 and 0.6 a MODERATE effect, above 0.6 a HIGH effect.
                        
