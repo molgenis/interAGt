@@ -6,7 +6,8 @@ Author: T.Niemeijer
 Date: 18-05-2026
 """
 
-import requests
+import re
+import json
 
 import plotly.express as px
 
@@ -17,6 +18,8 @@ from alphagenome.data import genome, gene_annotation, transcript
 from alphagenome.models import dna_client, variant_scorers
 
 from plot_functions import generate_plotly_figure
+
+pd.set_option("styler.render.max_elements", 500000)
 
 ### FUNCTIONS
 
@@ -42,6 +45,30 @@ def load_ontology_terms(_model, organism):
     display_options = sorted(display_options)
 
     return curie_to_label, display_options
+
+### LOAD TRANSCRIPTS -- from AlphaGenome Docs 
+@st.cache_data
+def load_transcripts(organism="Human (hg38)"):
+
+    if organism == "Human (hg38)":
+        gtf = pd.read_feather(
+            'https://storage.googleapis.com/alphagenome/reference/gencode/'
+            'hg38/gencode.v46.annotation.gtf.gz.feather'
+        )
+
+    else: 
+        # incorrect, looks like this is mm39 instead of mm10
+        gtf = pd.read_feather(
+            "https://storage.googleapis.com/alphagenome/reference/gencode/mm10/gencode.vM23.annotation.gtf.gz.feather"
+        )
+
+    gtf_transcript = gene_annotation.filter_transcript_support_level(
+        gene_annotation.filter_protein_coding(gtf), ['1']
+    )
+    transcript_extractor = transcript.TranscriptExtractor(gtf_transcript)
+
+    return transcript_extractor
+
 
 def parse_variant_interval(variant, seq_length):
     chrom, pos, ref, alt = variant.strip().split(":")
@@ -82,77 +109,58 @@ def load_tracks(_model, organism):
     return track_map
 
 
+# @st.cache_data
+# def flatten_tissue_terms(tissue_terms):
 
-def search_hpo(query):
-    url = "https://www.ebi.ac.uk/ols4/api/search"
-    params = {
-        "q": query,
-        "ontology": "hp"
-    }
+#     flat_terms = []
 
-    r = requests.get(url, params=params)
-    r.raise_for_status()
+#     for item in tissue_terms:
 
-    docs = r.json()["response"]["docs"]
+#         if isinstance(item, dict):
 
-    return [
-        f"{d['obo_id']} - {d['label']}"
-        for d in docs[:20]
-        if "obo_id" in d
-    ]
+#             for ontology_id, label in item.items():
 
-import requests
-import streamlit as st
+#                 flat_terms.append(
+#                     f"{label} ({ontology_id})"
+#                 )
 
-@st.cache_data
-def get_hpo_mapping(hp_id):
-    """
-    Retrieve UBERON / CL / EFO mappings from OLS.
-    """
+#         else:
 
-    url = (
-        "https://www.ebi.ac.uk/ols4/api/search"
-    )
+#             flat_terms.append(str(item))
 
-    params = {
-        "q": hp_id,
-        "ontology": "hp",
-        "exact": "true"
-    }
+#     return flat_terms
 
-    r = requests.get(url, params=params)
-    r.raise_for_status()
 
-    docs = r.json()["response"]["docs"]
+# @st.cache_data
+# def get_relevant_tissue_and_genes(selected_hpos, tissue_terms):
 
-    if not docs:
-        return {
-            "uberon": [],
-            "cl": [],
-            "efo": []
-        }
+#     tissue_terms = flatten_tissue_terms(tissue_terms)
 
-    doc = docs[0]
+#     matches = set()
+#     relevant_genes = set()
 
-    mappings = {
-        "uberon": [],
-        "cl": [],
-        "efo": []
-    }
+#     for hp_id in selected_hpos:
+#         hpo_label = hp_id.split(" - ")[1]
+#         hpo_text = ( hpo_label + " " + hpo_lookup[hp_id]["definition"]).lower()
 
-    # xrefs usually live here
-    for xref in doc.get("obo_xref", []):
+#         for tissue in tissue_terms:
 
-        if xref.startswith("UBERON:"):
-            mappings["uberon"].append(xref)
+#             tissue_name = tissue.split("(")[0].strip().lower()
 
-        elif xref.startswith("CL:"):
-            mappings["cl"].append(xref)
+#             tissue_words = set(
+#                 re.findall(r"[a-z]+", tissue_name)
+#             )
 
-        elif xref.startswith("EFO:"):
-            mappings["efo"].append(xref)
+#             if any(
+#                 word in hpo_text
+#                 for word in tissue_words
+#                 if len(word) > 3
+#             ):
+#                 matches.add(tissue)
+#         for gene in hpo_lookup[hp_id]["genes"]:
+#             relevant_genes.add(gene)
 
-    return mappings
+#     return sorted(matches), sorted(relevant_genes)
 
 
 ### CONFIG
@@ -163,13 +171,10 @@ st.info("""
     This app provides an intuitive interface to **AlphaGenome** (Avsec et al., 2026), Google DeepMind's **unified deep learning model** for interpreting the functional impact of genetic variants on **gene regulation**. AlphaGenome analyzes DNA sequences up to **1 million base pairs** at single-base resolution, predicting **11 types of genomic tracks**—including gene expression (RNA-seq), chromatin accessibility (ATAC, DNase), transcription factor binding (ChIP-TF), histone modifications (ChIP-Histone), and splicing events—across thousands of **tissue- and cell-type-specific** contexts.
     
     *Žiga Avsec, Natasha Latysheva, Jun Cheng, *et al.* **Advancing regulatory variant effect prediction with AlphaGenome.** *Nature*, 649(8099):1206-1218, 2026. [DOI:10.1038/s41586-025-10014-0](https://doi.org/10.1038/s41586-025-10014-0).*
-    ##### **Note**
-    This app uses the **free, non-commercial AlphaGenome API**. An API key is required and can be obtained [here](https://deepmind.google.com/science/alphagenome/account/terms).
-    For more details, see the [AlphaGenome Documentation](https://www.alphagenomedocs.com).
     """)
 
 track_explanations = {
-    'table':"Full table showing all selected results, raw scores and quantiles which are standardized, track-specific metric that maps a variant's raw predicted impact score to its percentile rank against a fixed background distribution of approximately 350,000 common human SNPs",
+    'scores':"Results from variant scoring, sorted by raw_score and HPO - gene matching. Quantile scores are standardized, track-specific metric that maps a variant's raw predicted impact score to its percentile rank against a fixed background of approximately 350,000 common human SNPs.",
     'RNA_SEQ': "Measures gene expression levels. High scores indicate increased transcription; low scores indicate decreased transcription. Variants here may affect promoter activity, exon inclusion, or mRNA stability.",
     'CAGE': "Cap Analysis Gene Expression: Identifies transcription start sites (TSSs). High scores indicate active promoters. Variants may disrupt promoter motifs or create new TSSs.",
     'PROCAP': "Promoter Capture-C: Maps promoter interactions with other genomic regions (e.g., enhancers). High scores indicate strong promoter contacts. Variants may disrupt long-range regulatory loops.",
@@ -180,37 +185,23 @@ track_explanations = {
     'POLYADENYLATION': "Identifies polyadenylation sites (PAS), where mRNA transcription terminates. High scores indicate active PAS. Variants may cause alternative polyadenylation, affecting mRNA stability or localization.",
     'SPLICE_SITES': "Predicts splice donor/acceptor sites. High scores indicate strong splice sites. Variants may disrupt splicing, leading to exon skipping or cryptic splice site usage.",
     'SPLICE_SITE_USAGE': "Quantifies the usage of splice sites. High scores indicate frequent splicing at this site. Variants may reduce usage, causing aberrant splicing or intron retention.",
-    'SPLICE_JUNCTIONS': "Measures splicing between exons. High scores indicate strong exon-exon junctions. Variants may disrupt junctions, leading to mis-splicing or novel isoforms."
+    'SPLICE_JUNCTIONS': "Measures splicing between exons. High scores indicate strong exon-exon junctions. Variants may disrupt junctions, leading to mis-splicing or novel isoforms.",
+    'CONTACT_MAPS':"Differential contact maps (ALT vs REF) highlight predicted changes in chromatin interactions caused by the variant. Positive values indicate increased contact strength in the alternate allele, while negative values indicate decreased contact strength.",
 }
 
 ### LOAD HPO
 
-import json
-
-with open("resources/hp.json") as f:
-    hp = json.load(f)
-
-### LOAD HPO OPTIONS
-hp_options = []
-
-for node in hp["graphs"][0]["nodes"]:
-
-    if node.get("type") != "CLASS":
-        continue
-
-    hp_id = node["id"].split("/")[-1].replace("_", ":")
-
-    label = node.get("lbl", hp_id)
-
-    hp_options.append(
-        f"{hp_id} - {label}"
-    )
-
-hp_options = sorted(hp_options)
-
+with open("resources/hp_info_gene.json") as f:
+    hpo_lookup = json.load(f)
 
 ### API KEY
+        
 api_key = st.text_input("Enter API Key", type="password")
+st.info(
+    """
+    This app uses the **free, non-commercial AlphaGenome API**. An API key is required and can be obtained [here](https://deepmind.google.com/science/alphagenome/account/terms).
+    For more details, see the [AlphaGenome Documentation](https://www.alphagenomedocs.com).)
+    """)
 
 @st.cache_resource
 def load_model(api_key):
@@ -219,8 +210,8 @@ def load_model(api_key):
 st.markdown("<p style='text-align: left; color: #555; font-size:30px;'>Model parameters</p>", unsafe_allow_html=True)
 ### ORGANISM SELECTION
 organism_map = {
-    "Human": dna_client.Organism.HOMO_SAPIENS,
-    "Mouse": dna_client.Organism.MUS_MUSCULUS,
+    "Human (hg38)": dna_client.Organism.HOMO_SAPIENS,
+    "Mouse (mm10)": dna_client.Organism.MUS_MUSCULUS,
 }
 
 organism_label = st.selectbox("Select organism", list(organism_map.keys()))
@@ -235,38 +226,36 @@ if api_key:
     except Exception as e:
         st.warning(f"Could not load ontology terms: {e}")
 
+if api_key:
+    try:
+        transcript_extractor = load_transcripts(organism_label)
+    except Exception as e:
+        st.warning(f"Could not load transcripts: {e}")
 
-### LOAD TRANSCRIPTS -- from AlphaGenome Docs 
-@st.cache_data
-def load_transcripts():
-    gtf = pd.read_feather(
-        'https://storage.googleapis.com/alphagenome/reference/gencode/'
-        'hg38/gencode.v46.annotation.gtf.gz.feather'
-    )
-
-    gtf_transcript = gene_annotation.filter_transcript_support_level(
-        gene_annotation.filter_protein_coding(gtf), ['1']
-    )
-    transcript_extractor = transcript.TranscriptExtractor(gtf_transcript)
-
-    return transcript_extractor
-
-
-transcript_extractor = load_transcripts()
 
 ### VARIANT INPUT
+example_variant = "chr13:73626861:A:G" if organism_label == "Mouse (mm10)" else "chr5:1295113:G:A"
+
+
 variant_str = st.text_input(
-    "Variant GRCh38/hg38 (chr:pos:ref:alt)",
-    value="chr5:1295113:G:A"
+    f"Variant {organism_label} (chr:pos:ref:alt)",
+    value=example_variant
 )
 
 seq_length = st.select_slider("Sequence window (bp)", [16384, 131072, 524288, 1048576])
+st.info(
+    """
+    The sequence window is the amount of bases (context) around the variant that will be used for the prediction.
+    """)
 
 # phenotype selection
-selected_hpos = st.multiselect(
-    "Patient HPO terms",
-    options=hp_options
-)
+if organism_label == "Human (hg38)":
+    selected_hpos = st.multiselect(
+        "(optional) HPO terms",
+        options=hpo_lookup,
+    )
+else:
+    selected_hpos = None
 
 ### RUN
 
@@ -287,7 +276,8 @@ scorer_selection = st.multiselect("Select Variant scorers", [
                                 'DNASE',
                                 'CHIP_HISTONE',
                                 'CHIP_TF',
-                                'Polyadenylation'],
+                                'Polyadenylation',
+                                "CONTACT_MAPS"],
                                 default=['RNA_SEQ'])
 scorer_selection = [scorer.lower() for scorer in scorer_selection]
 all_scorers = variant_scorers.RECOMMENDED_VARIANT_SCORERS
@@ -307,7 +297,7 @@ if st.button("Get Variant scores"):
         df_scores = variant_scorers.tidy_scores(variant_scores)
 
         if df_scores is not None:
-            st.session_state.var_df = df_scores.sort_values("raw_score", key=abs, ascending=False)
+            st.session_state.var_df = df_scores.sort_values("raw_score", key=abs, ascending=False).drop(columns=["variant_id","scored_interval"])
         else:
             st.session_state.var_df = None
             st.error("No variant results")
@@ -315,45 +305,29 @@ if st.button("Get Variant scores"):
 if st.session_state.var_df is not None:
 
     if selected_hpos:
-        selected_uberon = set()
-        selected_cl = set()
 
-        for item in selected_hpos:
-
-            hp_id = item.split(" - ")[0]
-
-            mappings = get_hpo_mapping(hp_id)
-
-            selected_uberon.update(
-                mappings["uberon"]
-            )
-
-            selected_cl.update(
-                mappings["cl"]
-            )
-
-        selected_terms = (
-            selected_uberon |
-            selected_cl
-        )
-        print(mappings)
+        relevant_genes = set([gene for hpo_term in selected_hpos for gene in hpo_lookup[hpo_term]["genes"]])
 
         df = st.session_state.var_df.copy()
 
-        df["hpo_relevance"] = (
-            df["ontology_curie"]
-            .isin(selected_terms)
+        df["hpo_gene_relevance"] = (
+            df["gene_name"]
+            .isin(relevant_genes)
             .astype(int)
-            )
+        )
 
         df = df.sort_values(
-            ["hpo_relevance", "raw_score"],
-            ascending=[False, False]
-            )
+            [
+                "hpo_gene_relevance",
+                "raw_score",
+            ],
+            ascending=[False, False],
+        )
+
         st.session_state.var_df = df
-    
-    with st.expander("Results table", expanded=True):
-        st.info(f"#### Info: \n{track_explanations.get('table', 'No explanation available.')}")
+
+    with st.expander("All results", expanded=True):
+        st.info(f"#### Info: \n{track_explanations.get("scores", 'No explanation available.')}")
         st.dataframe(st.session_state.var_df)
 
     # Get unique output types
@@ -432,11 +406,6 @@ if st.session_state.var_df is not None:
 
 st.markdown("<p style='text-align: left; color: #555; font-size:30px;'>Visualize tracks</p>", unsafe_allow_html=True)
 
-### TRACK SELECTION
-
-#dark_mode = st.toggle("Dark mode plots", value=False)
-#plt.style.use("dark_background" if dark_mode else "default")
-
 ### SEARCHABLE ONTOLOGY SELECTOR
 if api_key:
     curie_to_label, display_options = load_ontology_terms(model, organism)
@@ -465,7 +434,7 @@ if api_key:
 
     selected_tracks = st.multiselect(
         "Search & select tracks",
-        list(track_map.keys() - ["SPLICE_SITES", "SPLICE_SITE_USAGE", "CONTACT_MAPS"]),
+        list(track_map.keys() - ["SPLICE_SITES", "SPLICE_SITE_USAGE"]),
         default=["RNA_SEQ","CHIP_TF","ATAC"]  # pick a few defaults
     )
 

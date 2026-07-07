@@ -51,7 +51,13 @@ pip install streamlit plotly numpy alphagenome
 
 Run the app:
 
+(optional) activate the virtual environment
+
 ```bash
 streamlit run main.py
+```
+or when this gives an error:
+```bash
+python -m streamlit run main.py
 ```
 

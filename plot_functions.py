@@ -3,7 +3,6 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import numpy as np
 
-
 def assign_transcript_tracks(transcripts):
     transcript_ranges = []
 
@@ -58,7 +57,7 @@ def generate_plotly_figure(outputs, variant, selected_tracks, track_map, interva
             continue
 
         # For continuous tracks (RNA_SEQ, ATAC, etc.)
-        if track_name not in ["SPLICE_JUNCTIONS", "SPLICE_SITES", "SPLICE_SITE_USAGE"]:
+        if track_name not in ["SPLICE_JUNCTIONS", "SPLICE_SITES", "SPLICE_SITE_USAGE", "CONTACT_MAPS"]:
             for i in range(ref_data.values.shape[1]):
                 metadata = ref_data.metadata.iloc[i]
                 subplot_specs.append({
@@ -85,6 +84,17 @@ def generate_plotly_figure(outputs, variant, selected_tracks, track_map, interva
                     "metadata": metadata,
                     "type": "sashimi"
                 })
+        elif track_name == "CONTACT_MAPS":
+            for i in range(ref_data.values.shape[2]):
+                metadata = ref_data.metadata.iloc[i]
+                subplot_specs.append({
+                    "track_name": track_name,
+                    "ref_data": ref_data,
+                    "alt_data": alt_data,
+                    "track_idx": i,
+                    "metadata": metadata,
+                    "type": "contact_map"
+                })
         else:
             continue
                 
@@ -95,18 +105,37 @@ def generate_plotly_figure(outputs, variant, selected_tracks, track_map, interva
     n_subplots = len(subplot_specs) + 1
     transcript_row = n_subplots
 
+    
+    # Give contact maps more vertical space
+    row_heights = []
+
+    for spec in subplot_specs:
+        if spec["type"] == "contact_map":
+            row_heights.append(10)      # bigger
+        elif spec["type"] == "sashimi":
+            row_heights.append(2)      # medium
+        else:  # continuous
+            row_heights.append(1)      # default
+
+    # transcript track
+    row_heights.append(2)
+
+    # normalize so Plotly is happy
+    row_heights = np.array(row_heights, dtype=float)
+    norm_row_heights = row_heights / row_heights.sum()
+
     fig = make_subplots(
         rows=n_subplots,
         cols=1,
         shared_xaxes=True,
-        vertical_spacing=max(0.2 - (0.015 * n_subplots), 0.01),  # Looser spacing
+        row_heights=norm_row_heights.tolist(),
+        vertical_spacing=max(0.2 - (0.015 * row_heights.sum()), 0.05),
         subplot_titles=[
             f"{spec['track_name']} | {spec['metadata']['name'] if spec['metadata'] is not None else ''} | "
-            f"{spec['metadata']['biosample_name'] if spec['metadata'] is not None and "biosample_name" in spec['metadata'] else ''} |"
-            f"{' strand: ' + spec['metadata']['strand'] if spec['metadata'] is not None and "strand" in spec['metadata'] else ''}"
+            f"{spec['metadata']['biosample_name'] if spec['metadata'] is not None and 'biosample_name' in spec['metadata'] else ''} |"
+            f"{' strand: ' + spec['metadata']['strand'] if spec['metadata'] is not None and 'strand' in spec['metadata'] else ''}"
             for spec in subplot_specs
         ]
-        
     )
     
     # Plot each track
@@ -152,8 +181,6 @@ def generate_plotly_figure(outputs, variant, selected_tracks, track_map, interva
                 ),
                 row=idx+1, col=1
             )
-
-
         elif spec["type"] == "sashimi":
             # Sashimi plot for splice junctions (ALL junctions on the SAME subplot)
             # Extract junctions from ref_data and alt_data
@@ -255,6 +282,37 @@ def generate_plotly_figure(outputs, variant, selected_tracks, track_map, interva
                 col=1,
                 showticklabels=False,
                 title_text="")
+        elif spec["type"] == "contact_map":
+
+            ref_contact_map = spec["ref_data"].values[:, :, spec["track_idx"]].copy()
+            alt_contact_map = spec["alt_data"].values[:, :,  spec["track_idx"]].copy()
+            contact_diff = alt_contact_map - ref_contact_map
+
+            bins = contact_diff.shape[0]
+
+            coords = np.linspace(
+                interval.start,
+                interval.end,
+                bins
+            )
+            y_center = row_heights[:idx].sum() + row_heights[idx]/2
+
+            fig.add_trace(
+                go.Heatmap(
+                    z=contact_diff,
+                    x=coords,
+                    y=coords,
+                    colorscale="RdBu",
+                    zmid=0,
+                    showscale=True,
+                    colorbar=dict( title="Δ Contact", y=y_center, len= 2 / row_heights.sum()),
+                    zmin=-np.max([np.max(np.abs(contact_diff)), .5]),
+                    zmax=np.max([np.max(np.abs(contact_diff)), .5]),
+                ),
+            
+                row=idx + 1,
+                col=1)
+
 
     if transcripts:
 
@@ -338,6 +396,8 @@ def generate_plotly_figure(outputs, variant, selected_tracks, track_map, interva
                             size=8,
                             color="black",
                         ),
+                        text='',
+                        hoverinfo='skip',
                         showlegend=False
                     ),
                     row=transcript_row,
@@ -420,7 +480,7 @@ def generate_plotly_figure(outputs, variant, selected_tracks, track_map, interva
     
     # Update layout
     fig.update_layout(
-        height=500 + (120 * n_subplots),
+        height=500 + (120 * row_heights.sum()),
         width=1000,
         hovermode='x unified',
         plot_bgcolor='white',
