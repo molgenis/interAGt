@@ -295,7 +295,7 @@ def generate_plotly_figure(outputs, variant, selected_tracks, track_map, interva
                 interval.end,
                 bins
             )
-            y_center = row_heights[:idx].sum() + row_heights[idx]/2
+            #y_center = row_heights[:idx].sum() + row_heights[idx]/2
 
             fig.add_trace(
                 go.Heatmap(
@@ -304,8 +304,8 @@ def generate_plotly_figure(outputs, variant, selected_tracks, track_map, interva
                     y=coords,
                     colorscale="RdBu",
                     zmid=0,
-                    showscale=True,
-                    colorbar=dict( title="Δ Contact", y=y_center, len= 2 / row_heights.sum()),
+                    showscale=False,
+                    #colorbar=dict( title="Δ Contact", y=y_center, len= 2 / row_heights.sum()),
                     zmin=-np.max([np.max(np.abs(contact_diff)), .5]),
                     zmax=np.max([np.max(np.abs(contact_diff)), .5]),
                 ),
@@ -510,7 +510,10 @@ def generate_plotly_figure(outputs, variant, selected_tracks, track_map, interva
         )
 
     fig.update_xaxes(range=[interval.start,interval.end],autorange=False, constrain="domain")
-    fig.update_xaxes(title_text="Genomic Position")
+    fig.update_xaxes(
+                row=n_subplots,
+                col=1,
+                title_text="Genomic position")
     fig.update_yaxes(fixedrange=True)
 
     return fig

@@ -3,10 +3,9 @@ Streamlit AlphaGenome API app
 Accessing AG models without programming
 
 Author: T.Niemeijer
-Date: 18-05-2026
+Date: 08-07-2026
 """
-
-import re
+from pathlib import Path
 import json
 
 import plotly.express as px
@@ -20,6 +19,9 @@ from alphagenome.models import dna_client, variant_scorers
 from plot_functions import generate_plotly_figure
 
 pd.set_option("styler.render.max_elements", 500000)
+
+### CONSTS
+BASE_DIR = Path(__file__).resolve().parent
 
 ### FUNCTIONS
 
@@ -51,16 +53,27 @@ def load_ontology_terms(_model, organism):
 def load_transcripts(organism="Human (hg38)"):
 
     if organism == "Human (hg38)":
-        gtf = pd.read_feather(
-            'https://storage.googleapis.com/alphagenome/reference/gencode/'
-            'hg38/gencode.v46.annotation.gtf.gz.feather'
+        local_path = (
+            BASE_DIR
+            / "resources"
+            / "gencode.v46.annotation.gtf.gz.feather"
         )
+        fallback_path = (
+            "https://storage.googleapis.com/alphagenome/reference/gencode/"
+            "hg38/gencode.v46.annotation.gtf.gz.feather"
+        )
+    else:
+        local_path = (
+            BASE_DIR
+            / "resources"
+            / "gencode.vM23.annotation.gtf.gz.v2.feather"
+        )
+        fallback_path = (
+            "https://storage.googleapis.com/alphagenome/reference/gencode/"
+            "mm10/gencode.vM23.annotation.gtf.gz.feather"
+        ) # at the moment wrong reference genome: mm39 instead of mm10
 
-    else: 
-        # incorrect, looks like this is mm39 instead of mm10
-        gtf = pd.read_feather(
-            "https://storage.googleapis.com/alphagenome/reference/gencode/mm10/gencode.vM23.annotation.gtf.gz.feather"
-        )
+    gtf = pd.read_feather(local_path if local_path.exists() else fallback_path)
 
     gtf_transcript = gene_annotation.filter_transcript_support_level(
         gene_annotation.filter_protein_coding(gtf), ['1']
@@ -108,61 +121,6 @@ def load_tracks(_model, organism):
 
     return track_map
 
-
-# @st.cache_data
-# def flatten_tissue_terms(tissue_terms):
-
-#     flat_terms = []
-
-#     for item in tissue_terms:
-
-#         if isinstance(item, dict):
-
-#             for ontology_id, label in item.items():
-
-#                 flat_terms.append(
-#                     f"{label} ({ontology_id})"
-#                 )
-
-#         else:
-
-#             flat_terms.append(str(item))
-
-#     return flat_terms
-
-
-# @st.cache_data
-# def get_relevant_tissue_and_genes(selected_hpos, tissue_terms):
-
-#     tissue_terms = flatten_tissue_terms(tissue_terms)
-
-#     matches = set()
-#     relevant_genes = set()
-
-#     for hp_id in selected_hpos:
-#         hpo_label = hp_id.split(" - ")[1]
-#         hpo_text = ( hpo_label + " " + hpo_lookup[hp_id]["definition"]).lower()
-
-#         for tissue in tissue_terms:
-
-#             tissue_name = tissue.split("(")[0].strip().lower()
-
-#             tissue_words = set(
-#                 re.findall(r"[a-z]+", tissue_name)
-#             )
-
-#             if any(
-#                 word in hpo_text
-#                 for word in tissue_words
-#                 if len(word) > 3
-#             ):
-#                 matches.add(tissue)
-#         for gene in hpo_lookup[hp_id]["genes"]:
-#             relevant_genes.add(gene)
-
-#     return sorted(matches), sorted(relevant_genes)
-
-
 ### CONFIG
 st.set_page_config(page_title="AlphaGenome streamlit app", layout="wide")
 st.markdown("<p style='text-align: center; color: #333; font-size:40px;'>AlphaGenome variant interpreter</p>", unsafe_allow_html=True)
@@ -191,7 +149,7 @@ track_explanations = {
 
 ### LOAD HPO
 
-with open("resources/hp_info_gene.json") as f:
+with open( BASE_DIR / "resources" / "hp_info_gene.json") as f:
     hpo_lookup = json.load(f)
 
 ### API KEY
@@ -234,7 +192,7 @@ if api_key:
 
 
 ### VARIANT INPUT
-example_variant = "chr13:73626861:A:G" if organism_label == "Mouse (mm10)" else "chr5:1295113:G:A"
+example_variant = "chr13:73626861:A:G" if organism_label == "Mouse (mm10)" else "chr5:1295113:G:A" # No good example for mice yet.
 
 
 variant_str = st.text_input(
@@ -248,6 +206,18 @@ st.info(
     The sequence window is the amount of bases (context) around the variant that will be used for the prediction.
     """)
 
+
+scorer_selection_choice = [
+                        'RNA_SEQ',
+                        'CAGE',
+                        'PROCAP',
+                        'ATAC',
+                        'DNASE',
+                        'CHIP_HISTONE',
+                        'CHIP_TF',
+                        'Polyadenylation',
+                        "CONTACT_MAPS"]
+
 # phenotype selection
 if organism_label == "Human (hg38)":
     selected_hpos = st.multiselect(
@@ -256,6 +226,7 @@ if organism_label == "Human (hg38)":
     )
 else:
     selected_hpos = None
+    scorer_selection_choice.remove('Polyadenylation')
 
 ### RUN
 
@@ -268,16 +239,8 @@ if "var_df" not in st.session_state:
 
 st.markdown("<p style='text-align: left; color: #555; font-size:30px;'>Variant scores</p>", unsafe_allow_html=True)
 
-scorer_selection = st.multiselect("Select Variant scorers", [
-                                'RNA_SEQ',
-                                'CAGE',
-                                'PROCAP',
-                                'ATAC',
-                                'DNASE',
-                                'CHIP_HISTONE',
-                                'CHIP_TF',
-                                'Polyadenylation',
-                                "CONTACT_MAPS"],
+
+scorer_selection = st.multiselect("Select Variant scorers", scorer_selection_choice,
                                 default=['RNA_SEQ'])
 scorer_selection = [scorer.lower() for scorer in scorer_selection]
 all_scorers = variant_scorers.RECOMMENDED_VARIANT_SCORERS
