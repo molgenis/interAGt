@@ -1,5 +1,7 @@
 import os
 import sys
+import threading
+import webbrowser
 from streamlit.web import cli as stcli
 
 
@@ -11,6 +13,12 @@ if __name__ == "__main__":
     )
 
     app_path = os.path.join(base_path, "main.py")
+
+    # Open browser after a short delay
+    threading.Timer(
+        2.0,
+        lambda: webbrowser.open("http://localhost:8501")
+    ).start()
 
     sys.argv = [
         "streamlit",

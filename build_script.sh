@@ -1,5 +1,4 @@
-pyinstaller --windowed \
-  --noconfirm \
+pyinstaller --noconfirm \
   --clean \
   --onedir \
   --name AGInterpet \
