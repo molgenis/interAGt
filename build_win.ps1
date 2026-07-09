@@ -2,7 +2,7 @@ $args = @(
     "--noconfirm"
     "--clean"
     "--onedir"
-    "--name", "AGInterpet"
+    "--name", "AGInterpret"
     "--collect-all", "streamlit"
     "--collect-all", "alphagenome"
     "--collect-all", "plotly"
