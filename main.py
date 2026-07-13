@@ -122,8 +122,27 @@ def load_tracks(_model, organism):
     return track_map
 
 ### CONFIG
-st.set_page_config(page_title="AlphaGenome streamlit app", layout="wide")
-st.markdown("<p style='text-align: center; color: #333; font-size:40px;'>AlphaGenome variant interpreter</p>", unsafe_allow_html=True)
+st.set_page_config(page_title="InterAGt", layout="wide")
+
+import streamlit as st
+import base64
+
+with open(BASE_DIR / "resources" / "logo_interAGt.svg", "rb") as f:
+    svg_base64 = base64.b64encode(f.read()).decode()
+
+    st.markdown(
+        f"""
+        <div style="
+            display:flex;
+            justify-content:center;
+            width:100%;"
+        >
+            <img
+                src="data:image/svg+xml;base64,{svg_base64}" >
+        """,
+            unsafe_allow_html=True)
+    st.space()
+
 st.info("""
 
     This app provides an intuitive interface to **AlphaGenome** (Avsec et al., 2026), Google DeepMind's **unified deep learning model** for interpreting the functional impact of genetic variants on **gene regulation**. AlphaGenome analyzes DNA sequences up to **1 million base pairs** at single-base resolution, predicting **11 types of genomic tracks**—including gene expression (RNA-seq), chromatin accessibility (ATAC, DNase), transcription factor binding (ChIP-TF), histone modifications (ChIP-Histone), and splicing events—across thousands of **tissue- and cell-type-specific** contexts.

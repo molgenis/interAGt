@@ -1,4 +1,5 @@
-# AlphaGenome API Variant Interpretation App
+![title](resources/logo_interAGt.svg)
+
 **A user-friendly interface for analyzing genetic variant effects using Google DeepMind's AlphaGenome API**
 
 ---
