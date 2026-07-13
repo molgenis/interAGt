@@ -308,7 +308,7 @@ if st.session_state.var_df is not None:
 
         st.session_state.var_df = df
 
-    with st.expander("All results", expanded=True):
+    with st.expander("All results", expanded=False):
         st.info(f"#### Info: \n{track_explanations.get("scores", 'No explanation available.')}")
         st.dataframe(st.session_state.var_df)
 

@@ -365,7 +365,7 @@ def generate_plotly_figure(outputs, variant, selected_tracks, track_map, interva
                         x=[intron_start, intron_end],
                         y=[y, y],
                         mode="lines",
-                        line=dict(color="black", width=1),
+                        line=dict(color="#555555", width=1),
                         showlegend=False,
                         hoverinfo='skip',
                     ),
@@ -394,7 +394,7 @@ def generate_plotly_figure(outputs, variant, selected_tracks, track_map, interva
                         marker=dict(
                             symbol=arrow_symbol,
                             size=8,
-                            color="black",
+                            color="#555555",
                         ),
                         text='',
                         hoverinfo='skip',
@@ -459,7 +459,8 @@ def generate_plotly_figure(outputs, variant, selected_tracks, track_map, interva
                         x1=end,
                         y0=y - height / 2,
                         y1=y + height / 2,
-                        fillcolor="#000000" if coding else "#000000",
+                        fillcolor="#555555",
+                        line=dict(color="#555555", width=0),
                         row=transcript_row,
                         col=1,
                     )
@@ -483,8 +484,8 @@ def generate_plotly_figure(outputs, variant, selected_tracks, track_map, interva
         height=500 + (120 * row_heights.sum()),
         width=1000,
         hovermode='x unified',
-        plot_bgcolor='white',
-        paper_bgcolor='white',
+        #plot_bgcolor='white',
+        #paper_bgcolor='white',
         legend=dict(
             orientation="h",
             yanchor="bottom",
