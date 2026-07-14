@@ -17,6 +17,7 @@ from alphagenome.data import genome, gene_annotation, transcript
 from alphagenome.models import dna_client, variant_scorers
 
 from plot_functions import generate_plotly_figure
+from helper_functions import normalize_variant
 
 pd.set_option("styler.render.max_elements", 500000)
 
@@ -101,6 +102,16 @@ def parse_variant_interval(variant, seq_length):
     )
 
     return interval, variant_obj
+
+@st.cache_data
+def convert_variant(variant_str: str):
+    normalized_variant_str, error = normalize_variant(variant_str, organism_label)
+    if error:
+        st.error(error)
+    else:
+        if normalized_variant_str != variant_str:
+            st.success(f"Normalized: {normalized_variant_str}")
+        return normalized_variant_str
 
 
 @st.cache_data
@@ -214,10 +225,15 @@ if api_key:
 example_variant = "chr13:73626861:A:G" if organism_label == "Mouse (mm10)" else "chr5:1295113:G:A" # No good example for mice yet.
 
 
-variant_str = st.text_input(
-    f"Variant {organism_label} (chr:pos:ref:alt)",
-    value=example_variant
-)
+variant_str = st.text_input(f"Variant {organism_label}", value=example_variant)
+
+if variant_str:
+    variant_str_result = convert_variant(variant_str)
+    if variant_str_result and variant_str_result.__contains__(','):
+        normalized_variant_str = st.selectbox("Multiple options available; select single variant", list(variant_str_result.split(',')))
+else:
+    normalized_variant_str = None
+    
 
 seq_length = st.select_slider("Sequence window (bp)", [16384, 131072, 524288, 1048576])
 st.info(
@@ -269,7 +285,7 @@ if st.button("Get Variant scores"):
         st.error("Enter API key.")
     else:
         model = load_model(api_key)
-        interval, variant = parse_variant_interval(variant_str, seq_length)
+        interval, variant = parse_variant_interval(normalized_variant_str, seq_length)
         variant_scores = model.score_variant(
                                     interval=interval,
                                     variant=variant,
@@ -429,7 +445,7 @@ if st.button("Visualize"):
     else:
         try:
             model = load_model(api_key)
-            interval, variant = parse_variant_interval(variant_str, seq_length)
+            interval, variant = parse_variant_interval(normalized_variant_str, seq_length)
 
             with st.spinner("Running model..."):
                 outputs = model.predict_variant(
@@ -455,6 +471,6 @@ if st.session_state.fig_tracks is not None:
     st.download_button(
         label="Download Plot (HTML)",
         data=html_str,
-        file_name=f"{variant_str.replace(':', '_')}_tracks.html",
+        file_name=f"{normalized_variant_str}_tracks.html",
         mime="text/html"
     )
