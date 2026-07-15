@@ -110,7 +110,7 @@ def convert_variant(variant_str: str):
         st.error(error)
     else:
         if normalized_variant_str != variant_str:
-            st.success(f"Normalized: {normalized_variant_str}")
+            st.success(f"Variant(s): {', '.join(normalized_variant_str.split(","))}")
         return normalized_variant_str
 
 
@@ -225,12 +225,17 @@ if api_key:
 example_variant = "chr13:73626861:A:G" if organism_label == "Mouse (mm10)" else "chr5:1295113:G:A" # No good example for mice yet.
 
 
-variant_str = st.text_input(f"Variant {organism_label}", value=example_variant)
+variant_str = st.text_input(f"Variant {organism_label}", value=example_variant, help="Variants in 'chrom:pos:ref:alt' or (human only)\
+                             for HGVS genomic and c./r. notations\
+                             (e.g. 'NC_000023.10:g.33038255C>A', NM_004006.2:c.93+1G>T)\
+                             a call will be made to VariantValidator to retrieve genomic positions.")
 
 if variant_str:
     variant_str_result = convert_variant(variant_str)
     if variant_str_result and variant_str_result.__contains__(','):
-        normalized_variant_str = st.selectbox("Multiple options available; select single variant", list(variant_str_result.split(',')))
+        normalized_variant_str = st.selectbox("More than one option available - selected variant:", list(variant_str_result.split(',')))
+    else:
+        normalized_variant_str = variant_str_result
 else:
     normalized_variant_str = None
     
