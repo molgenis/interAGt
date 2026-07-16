@@ -62,3 +62,13 @@ or when this gives an error:
 python -m streamlit run main.py
 ```
 
+### **5. Start the React + FastAPI app**
+
+To run the new app stack, use the provided startup script from the repository root:
+
+```bash
+./start.sh
+```
+
+This starts the FastAPI backend with `uvicorn`, builds the React frontend, and serves it with `bun run preview`.
+

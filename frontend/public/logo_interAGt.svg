@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 150" width="400" height="150">
+  <defs>
+    <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#FF0C57;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#017FFD;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+
+  <!-- Text inside the strand with AG darker, all together -->
+  <text x="150" y="95" font-family="'PT Sans', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" 
+        font-size="48" font-weight="600" fill="#6C757D">
+    inter<tspan fill="#212529" font-weight="700">AG</tspan>t
+  </text>
+  
+  <!-- Single DNA strand (wavy line) -->
+  <path d="M50,75 Q75,40 100,40 T140,110 T180,75 T220,40" 
+        stroke="url(#gradient)" stroke-width="3" fill="none" stroke-linecap="round"/>
+  
+  <!-- Scatter plot points -->
+  <circle cx="50" cy="75" r="12" fill="url(#gradient)" opacity="0.9"/>
+  <circle cx="100" cy="40" r="8" fill="url(#gradient)" opacity="0.9"/>
+  <circle cx="140" cy="110" r="10" fill="url(#gradient)" opacity="0.9"/>
+  <circle cx="156" cy="60" r="8" fill="url(#gradient)" opacity="0.9"/>
+  <circle cx="220" cy="40" r="12" fill="url(#gradient)" opacity="0.9"/>
+  
+  <!-- Connecting dotted lines -->
+  <line x1="50" y1="75" x2="100" y2="40" stroke="#E0E0E0" stroke-width="1" stroke-dasharray="3,2"/>
+  <line x1="100" y1="40" x2="140" y2="110" stroke="#E0E0E0" stroke-width="1" stroke-dasharray="3,2"/>
+  <line x1="140" y1="110" x2="180" y2="75" stroke="#E0E0E0" stroke-width="1" stroke-dasharray="3,2"/>
+  <line x1="180" y1="75" x2="220" y2="40" stroke="#E0E0E0" stroke-width="1" stroke-dasharray="3,2"/>
+  
+  
+</svg>
