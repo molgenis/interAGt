@@ -189,19 +189,19 @@ function makeXAxis(
   showTicks: boolean,
   spec?: TrackSpec,
 ): Record<string, unknown> {
-  return {
+  const config: Record<string, unknown> = {
     anchor: yRef(row),
-    range,
-    autorange: false,
-    constrain: 'domain',
     showticklabels: showTicks,
-    title: spec
-      ? {
-          text: subplotTitle(spec),
-          standoff: 10,
-        }
-      : undefined,
+    title: spec ? { text: subplotTitle(spec), standoff: 10 } : undefined,
   }
+  if (row === 1) {
+    config.range = range
+    config.autorange = false
+    config.constrain = 'domain'
+  } else {
+    config.matches = 'x'  // Secondary axes inherit from primary
+  }
+  return config
 }
 
 function makeYAxis(row: number, spec?: TrackSpec): Record<string, unknown> {
