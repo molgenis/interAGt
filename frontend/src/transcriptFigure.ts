@@ -1,6 +1,6 @@
 import type { TranscriptSpec } from '@/api'
+import type { PlotTheme } from '@/plotly'
 
-const TX_COLOR = '#555555'
 const EXON_HEIGHT = 0.15
 const CDS_HEIGHT = 0.35
 const TRACK_SPACING = 1.0
@@ -51,11 +51,13 @@ export function buildTranscriptObjects(
   transcripts: TranscriptSpec[],
   xRef: string,
   yRef: string,
+  theme: PlotTheme,
 ): TranscriptResult {
   const traces: unknown[] = []
   const shapes: unknown[] = []
   const annotations: unknown[] = []
   const laneMap = assignLanes(transcripts)
+  const TX_COLOR = theme.fg
 
   for (const tx of transcripts) {
     const lane = laneMap.get(tx) ?? 0
@@ -72,7 +74,7 @@ export function buildTranscriptObjects(
       text: tx.transcript_id,
       showarrow: false,
       xanchor: 'left',
-      font: { size: 11 },
+      font: { size: 11, color: theme.fg },
       xref: xRef,
       yref: yRef,
     })

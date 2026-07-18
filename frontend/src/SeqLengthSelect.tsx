@@ -1,3 +1,12 @@
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/ui/select'
+
+// Keep in sync with SEQUENCE_LENGTHS in backend/schemas.py.
 export const SEQUENCE_LENGTHS = [16384, 131072, 524288, 1048576] as const
 
 export type SequenceLength = (typeof SEQUENCE_LENGTHS)[number]
@@ -9,28 +18,29 @@ function formatLabel(value: number): string {
 }
 
 export function SeqLengthSelect({
+  id,
   value,
   onChange,
 }: {
+  id?: string
   value: SequenceLength
   onChange: (v: SequenceLength) => void
 }) {
   return (
-    <div className="inline-flex rounded-lg border border-border p-0.5">
-      {SEQUENCE_LENGTHS.map((length) => (
-        <button
-          key={length}
-          type="button"
-          onClick={() => onChange(length)}
-          className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
-            value === length
-              ? 'bg-primary text-primary-foreground'
-              : 'text-muted-foreground hover:bg-muted'
-          }`}
-        >
-          {formatLabel(length)}
-        </button>
-      ))}
-    </div>
+    <Select
+      value={String(value)}
+      onValueChange={(v) => onChange(Number(v) as SequenceLength)}
+    >
+      <SelectTrigger id={id}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {SEQUENCE_LENGTHS.map((length) => (
+          <SelectItem key={length} value={String(length)}>
+            {formatLabel(length)}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   )
 }

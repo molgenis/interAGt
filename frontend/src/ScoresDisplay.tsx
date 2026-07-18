@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Plot, PLOTLY_CONFIG } from '@/plotly'
+import { Plot, PLOTLY_CONFIG, plotTheme, themedAxis, themedLayout } from '@/plotly'
 import type { ScoreRow, TrackExplanations } from '@/api'
 
 // ── ScoresTable ──────────────────────────────────────────────────────────────
@@ -81,7 +81,16 @@ function dedupe(rows: ScoreRow[]): ScoreRow[] {
   return [...byKey.values()]
 }
 
-function BarPanel({ title, rows }: { title: string; rows: ScoreRow[] }) {
+function BarPanel({
+  title,
+  rows,
+  isDark,
+}: {
+  title: string
+  rows: ScoreRow[]
+  isDark: boolean
+}) {
+  const theme = plotTheme(isDark)
   const sorted = [...rows].sort(
     (a, b) => toNumber(b.raw_score) - toNumber(a.raw_score),
   )
@@ -100,19 +109,20 @@ function BarPanel({ title, rows }: { title: string; rows: ScoreRow[] }) {
           hovertemplate: '%{x}<br>raw_score=%{y:.4f}<extra></extra>',
         },
       ]}
-      layout={{
+      layout={themedLayout(theme, {
         title: { text: title },
         height: 360,
         margin: { l: 50, r: 20, t: 50, b: 130 },
         xaxis: {
+          ...themedAxis(theme),
           title: { text: 'Tissue' },
           tickangle: -45,
           categoryorder: 'array',
           categoryarray: x,
         },
-        yaxis: { title: { text: 'raw_score' } },
+        yaxis: { ...themedAxis(theme), title: { text: 'raw_score' } },
         showlegend: false,
-      }}
+      })}
       config={PLOTLY_CONFIG}
       style={{ width: '100%' }}
       useResizeHandler
@@ -123,9 +133,11 @@ function BarPanel({ title, rows }: { title: string; rows: ScoreRow[] }) {
 function FacetGrid({
   rows,
   field,
+  isDark,
 }: {
   rows: ScoreRow[]
   field: string
+  isDark: boolean
 }) {
   const groups = new Map<string, ScoreRow[]>()
   for (const row of rows) {
@@ -138,7 +150,7 @@ function FacetGrid({
   return (
     <div className="grid grid-cols-1 gap-4">
       {[...groups.entries()].map(([name, groupRows]) => (
-        <BarPanel key={name} title={name} rows={groupRows} />
+        <BarPanel key={name} title={name} rows={groupRows} isDark={isDark} />
       ))}
     </div>
   )
@@ -148,10 +160,12 @@ export function ScoresSummaryCharts({
   rows,
   outputTypes,
   explanations,
+  isDark,
 }: {
   rows: ScoreRow[]
   outputTypes: string[]
   explanations?: TrackExplanations
+  isDark: boolean
 }) {
   return (
     <div className="space-y-8">
@@ -163,16 +177,21 @@ export function ScoresSummaryCharts({
 
         let chart
         if (outputType === 'RNA_SEQ')
-          chart = <FacetGrid rows={filtered} field="gene_name" />
+          chart = <FacetGrid rows={filtered} field="gene_name" isDark={isDark} />
         else if (outputType === 'CHIP_TF')
           chart = (
-            <FacetGrid rows={filtered} field="transcription_factor" />
+            <FacetGrid
+              rows={filtered}
+              field="transcription_factor"
+              isDark={isDark}
+            />
           )
         else
           chart = (
             <BarPanel
               title={`Variant Effect: ${outputType}`}
               rows={filtered}
+              isDark={isDark}
             />
           )
 

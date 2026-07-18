@@ -1,5 +1,21 @@
-import { useState, useRef, useEffect, useMemo } from 'react'
-import { Check, ChevronDown, X } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { Check, ChevronsUpDown, X } from 'lucide-react'
+import { Badge } from '@/ui/badge'
+import { Button } from '@/ui/button'
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/ui/command'
+import { Popover, PopoverContent, PopoverTrigger } from '@/ui/popover'
+import { cn } from '@/utils'
+
+// Option lists reach into the thousands (HPO terms); render a slice so the
+// popover stays responsive and let search narrow things down.
+const MAX_VISIBLE = 100
 
 interface MultiSelectProps {
   options: string[]
@@ -24,28 +40,15 @@ export function MultiSelect({
 }: MultiSelectProps) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const containerRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(event.target as Node)
-      ) {
-        setOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
+  const atLimit = typeof maxSelected === 'number' && selected.length >= maxSelected
 
-  const atLimit =
-    typeof maxSelected === 'number' && selected.length >= maxSelected
-
-  const filtered = useMemo(() => {
+  const visible = useMemo(() => {
     const needle = query.trim().toLowerCase()
-    if (!needle) return options
-    return options.filter((o) => o.toLowerCase().includes(needle))
+    const matches = needle
+      ? options.filter((o) => o.toLowerCase().includes(needle))
+      : options
+    return { items: matches.slice(0, MAX_VISIBLE), total: matches.length }
   }, [options, query])
 
   function toggle(option: string) {
@@ -57,35 +60,80 @@ export function MultiSelect({
   }
 
   return (
-    <div className="relative" ref={containerRef}>
-      <button
-        type="button"
-        id={id}
-        disabled={disabled}
-        aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
-        className="flex min-h-9 w-full items-center justify-between gap-2 rounded-lg border border-border bg-background px-3 py-1.5 text-left text-sm shadow-sm transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        <span
-          className={
-            selected.length === 0
-              ? 'truncate text-muted-foreground'
-              : 'truncate'
-          }
+    <div>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            id={id}
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            disabled={disabled}
+            className="w-full justify-between font-normal"
+          >
+            <span
+              className={cn(
+                'truncate',
+                selected.length === 0 && 'text-muted-foreground',
+              )}
+            >
+              {selected.length === 0
+                ? placeholder
+                : `${selected.length} selected`}
+            </span>
+            <ChevronsUpDown className="size-4 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent
+          className="w-[--radix-popover-trigger-width] p-0"
+          align="start"
         >
-          {selected.length === 0 ? placeholder : `${selected.length} selected`}
-        </span>
-        <ChevronDown className="size-4 shrink-0 opacity-60" />
-      </button>
+          <Command shouldFilter={false}>
+            {searchable && (
+              <CommandInput
+                placeholder="Search…"
+                value={query}
+                onValueChange={setQuery}
+              />
+            )}
+            <CommandList>
+              <CommandEmpty>No matches.</CommandEmpty>
+              <CommandGroup>
+                {visible.items.map((option) => {
+                  const isSelected = selected.includes(option)
+                  return (
+                    <CommandItem
+                      key={option}
+                      value={option}
+                      disabled={!isSelected && atLimit}
+                      onSelect={() => toggle(option)}
+                    >
+                      <Check
+                        className={cn(
+                          'size-4 shrink-0',
+                          isSelected ? 'opacity-100' : 'opacity-0',
+                        )}
+                      />
+                      <span className="truncate">{option}</span>
+                    </CommandItem>
+                  )
+                })}
+              </CommandGroup>
+            </CommandList>
+            {visible.total > MAX_VISIBLE && (
+              <p className="border-t px-3 py-2 text-xs text-muted-foreground">
+                Showing {MAX_VISIBLE} of {visible.total} — refine your search.
+              </p>
+            )}
+          </Command>
+        </PopoverContent>
+      </Popover>
 
       {selected.length > 0 && (
-        <div className="mt-1.5 flex flex-wrap gap-1">
+        <div className="mt-2 flex flex-wrap gap-1">
           {selected.map((item) => (
-            <span
-              key={item}
-              className="inline-flex items-center gap-1 rounded-md bg-secondary px-2 py-0.5 text-xs text-secondary-foreground"
-            >
-              {item}
+            <Badge key={item} variant="secondary" className="gap-1 font-normal">
+              <span className="max-w-[15rem] truncate">{item}</span>
               <button
                 type="button"
                 aria-label={`Remove ${item}`}
@@ -94,53 +142,15 @@ export function MultiSelect({
               >
                 <X className="size-3" />
               </button>
-            </span>
+            </Badge>
           ))}
         </div>
       )}
 
-      {open && (
-        <div className="absolute z-20 mt-1 w-full rounded-lg border border-border bg-popover p-1 shadow-lg">
-          {searchable && (
-            <input
-              autoFocus
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search…"
-              className="mb-1 w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm focus-visible:outline-none"
-            />
-          )}
-          <div className="max-h-64 overflow-auto">
-            {filtered.length === 0 && (
-              <p className="px-2 py-3 text-center text-sm text-muted-foreground">
-                No matches
-              </p>
-            )}
-            {filtered.map((option) => {
-              const isSelected = selected.includes(option)
-              const isDisabled = !isSelected && atLimit
-              return (
-                <button
-                  type="button"
-                  key={option}
-                  disabled={isDisabled}
-                  onClick={() => toggle(option)}
-                  className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40 ${isSelected ? 'bg-muted/60' : ''}`}
-                >
-                  <span className="flex size-4 items-center justify-center">
-                    {isSelected && <Check className="size-4 text-primary" />}
-                  </span>
-                  <span className="truncate">{option}</span>
-                </button>
-              )
-            })}
-          </div>
-          {typeof maxSelected === 'number' && (
-            <p className="px-2 pt-1 text-xs text-muted-foreground">
-              {selected.length}/{maxSelected} selected
-            </p>
-          )}
-        </div>
+      {typeof maxSelected === 'number' && selected.length > 0 && (
+        <p className="mt-1.5 text-xs text-muted-foreground">
+          {selected.length}/{maxSelected} selected
+        </p>
       )}
     </div>
   )

@@ -8,10 +8,10 @@ import type {
   TrackSpec,
 } from '@/api'
 import { buildTranscriptObjects, CDS_HEIGHT, TRACK_SPACING } from '@/transcriptFigure'
+import { plotTheme, themedAxis, themedLayout, type PlotTheme } from '@/plotly'
 
 const REF_COLOR = '#999'
 const ALT_COLOR = '#FF0C57'
-const SASHIMI_REF_COLOR = '#333'
 
 // --- Subplot axis helpers ---
 
@@ -101,6 +101,7 @@ function buildJunctionShapes(
   xaxis: string,
   yaxis: string,
   yOffset: number,
+  theme: PlotTheme,
 ): SashimiResult {
   const shapes: unknown[] = []
   const annotations: unknown[] = []
@@ -127,8 +128,8 @@ function buildJunctionShapes(
       y: sign * (height + 2) + yOffset,
       showarrow: false,
       text: jc.count.toFixed(1),
-      font: { color: '#333', size: 12 },
-      bgcolor: 'white',
+      font: { color: theme.fg, size: 12 },
+      bgcolor: theme.surface,
       xref: xaxis,
       yref: yaxis,
     })
@@ -142,13 +143,14 @@ function buildJunctionShapes(
 function buildSashimiObjects(
   spec: SashimiTrack,
   row: number,
+  theme: PlotTheme,
 ): { shapes: unknown[]; annotations: unknown[] } {
   const xa = xRef(row)
   const ya = yRef(row)
 
-  const ref = buildJunctionShapes(spec.ref_junctions, SASHIMI_REF_COLOR, xa, ya, 0)
+  const ref = buildJunctionShapes(spec.ref_junctions, theme.muted, xa, ya, 0, theme)
   const altOffset = -(ref.maxHeight + 10)
-  const alt = buildJunctionShapes(spec.alt_junctions, ALT_COLOR, xa, ya, altOffset)
+  const alt = buildJunctionShapes(spec.alt_junctions, ALT_COLOR, xa, ya, altOffset, theme)
 
   return {
     shapes: [...ref.shapes, ...alt.shapes],
@@ -187,9 +189,11 @@ function makeXAxis(
   row: number,
   range: [number, number],
   showTicks: boolean,
+  theme: PlotTheme,
   spec?: TrackSpec,
 ): Record<string, unknown> {
   const config: Record<string, unknown> = {
+    ...themedAxis(theme),
     anchor: yRef(row),
     showticklabels: showTicks,
     title: spec ? { text: subplotTitle(spec), standoff: 10 } : undefined,
@@ -204,8 +208,13 @@ function makeXAxis(
   return config
 }
 
-function makeYAxis(row: number, spec?: TrackSpec): Record<string, unknown> {
+function makeYAxis(
+  row: number,
+  theme: PlotTheme,
+  spec?: TrackSpec,
+): Record<string, unknown> {
   const cfg: Record<string, unknown> = {
+    ...themedAxis(theme),
     anchor: xRef(row),
     fixedrange: true,
   }
@@ -218,8 +227,12 @@ function makeYAxis(row: number, spec?: TrackSpec): Record<string, unknown> {
 
 // --- Main entry point ---
 
-export function buildTrackFigure(payload: TrackPlotResponse): PlotlyFigure {
+export function buildTrackFigure(
+  payload: TrackPlotResponse,
+  isDark = false,
+): PlotlyFigure {
   const { tracks, transcripts, interval, variant } = payload
+  const theme = plotTheme(isDark)
 
   const nSubplots = tracks.length + 1
   const transcriptRow = nSubplots
@@ -244,7 +257,7 @@ export function buildTrackFigure(payload: TrackPlotResponse): PlotlyFigure {
     if (spec.type === 'continuous') {
       data.push(...buildContinuousTraces(spec, row, idx === 0))
     } else if (spec.type === 'sashimi') {
-      const result = buildSashimiObjects(spec, row)
+      const result = buildSashimiObjects(spec, row, theme)
       shapes.push(...result.shapes)
       annotations.push(...result.annotations)
     } else if (spec.type === 'contact_map') {
@@ -255,7 +268,12 @@ export function buildTrackFigure(payload: TrackPlotResponse): PlotlyFigure {
   // Transcript track
   let nLanes = 1
   if (transcripts?.length) {
-    const tx = buildTranscriptObjects(transcripts, xRef(transcriptRow), yRef(transcriptRow))
+    const tx = buildTranscriptObjects(
+      transcripts,
+      xRef(transcriptRow),
+      yRef(transcriptRow),
+      theme,
+    )
     data.push(...tx.traces)
     shapes.push(...tx.shapes)
     annotations.push(...tx.annotations)
@@ -263,7 +281,7 @@ export function buildTrackFigure(payload: TrackPlotResponse): PlotlyFigure {
   }
 
   // Configure axes
-  const layout: Record<string, unknown> = {
+  const layout: Record<string, unknown> = themedLayout(theme, {
     height: 500 + 120 * totalHeight,
     hovermode: 'x unified',
     legend: { orientation: 'h', yanchor: 'bottom', y: 1.02, xanchor: 'right', x: 1 },
@@ -278,20 +296,22 @@ export function buildTrackFigure(payload: TrackPlotResponse): PlotlyFigure {
     },
     row_heights: rowHeights,
     vertical_spacing: 5 / ( 500 + 120 * totalHeight),
-  }
+  })
 
   for (let row = 1; row <= nSubplots; row++) {
     layout[xKey(row)] = makeXAxis(
-  row,
-  xRange,
-  row === nSubplots,
-  row <= tracks.length ? tracks[row - 1] : undefined,
-)
+      row,
+      xRange,
+      row === nSubplots,
+      theme,
+      row <= tracks.length ? tracks[row - 1] : undefined,
+    )
 
     if (row <= tracks.length) {
-      layout[yKey(row)] = makeYAxis(row, tracks[row - 1])
+      layout[yKey(row)] = makeYAxis(row, theme, tracks[row - 1])
     } else if (row === transcriptRow && transcripts?.length) {
       layout[yKey(row)] = {
+        ...themedAxis(theme),
         anchor: xRef(row),
         fixedrange: true,
         showticklabels: false,
@@ -299,7 +319,7 @@ export function buildTrackFigure(payload: TrackPlotResponse): PlotlyFigure {
         range: [-nLanes * TRACK_SPACING, CDS_HEIGHT + 0.8],
       }
     } else {
-      layout[yKey(row)] = makeYAxis(row)
+      layout[yKey(row)] = makeYAxis(row, theme)
     }
   }
 
@@ -314,7 +334,7 @@ export function buildTrackFigure(payload: TrackPlotResponse): PlotlyFigure {
       x1: variantPos,
       y0: 0,
       y1: 1,
-      line: { dash: 'dash', color: 'black', width: 1 },
+      line: { dash: 'dash', color: theme.fg, width: 1 },
     })
   }
 
@@ -330,7 +350,7 @@ export function buildTrackFigure(payload: TrackPlotResponse): PlotlyFigure {
     yanchor: 'top',
     xshift: 4,
     yshift: -4,
-    font: { size: 10 },
+    font: { size: 10, color: theme.fg },
   })
 
   return { data, layout }

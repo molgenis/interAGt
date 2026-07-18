@@ -1,11 +1,21 @@
 import { useState, useMemo } from 'react'
 import { Download } from 'lucide-react'
+import { Button } from '@/ui/button'
 import { Plot, PLOTLY_CONFIG } from '@/plotly'
 import { buildTrackFigure } from '@/trackFigure'
 import type { TrackPlotResponse } from '@/api'
 
-export function TrackPlot({ payload }: { payload: TrackPlotResponse }) {
-  const figure = useMemo(() => buildTrackFigure(payload), [payload])
+export function TrackPlot({
+  payload,
+  isDark,
+}: {
+  payload: TrackPlotResponse
+  isDark: boolean
+}) {
+  const figure = useMemo(
+    () => buildTrackFigure(payload, isDark),
+    [payload, isDark],
+  )
   return (
     <div className="w-full">
       <Plot
@@ -19,8 +29,9 @@ export function TrackPlot({ payload }: { payload: TrackPlotResponse }) {
   )
 }
 
+/** Exports always render light — the standalone file has a white page. */
 function renderHtml(payload: TrackPlotResponse): string {
-  const figure = buildTrackFigure(payload)
+  const figure = buildTrackFigure(payload, false)
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -66,13 +77,14 @@ export function DownloadHtmlButton({
   }
 
   return (
-    <button
+    <Button
+      variant="outline"
+      size="sm"
       onClick={handleDownload}
       disabled={busy || !payload}
-      className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-sm font-medium hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
     >
       <Download className="size-4" />
       {busy ? 'Preparing…' : 'Download Plot (HTML)'}
-    </button>
+    </Button>
   )
 }
