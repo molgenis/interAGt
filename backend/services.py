@@ -21,7 +21,7 @@ from backend.core import (
     NoVariantResultsError,
     UpstreamServiceError,
 )
-from helper_functions import normalize_variant
+from helper_functions import resolve_variant
 
 
 # ---------------------------------------------------------------------------
@@ -237,25 +237,30 @@ class NormalizedVariantResult:
     alternatives: list[str]
     message: str | None = None
     warnings: list[str] = field(default_factory=list)
+    needs_confirmation: bool = False
+    mapped_position: str | None = None
+    given_ref: str | None = None
+    actual_ref: str | None = None
 
 
 def normalize_variant_str(variant_str: str, organism_label: str) -> NormalizedVariantResult:
-    normalized_variant, error = normalize_variant(variant_str, organism_label)
-    if error:
-        raise InvalidVariantError(error)
-    if not normalized_variant:
+    resolution = resolve_variant(variant_str, organism_label)
+    # Hard errors still raise; a reference mismatch is flagged for confirmation.
+    if resolution.error:
+        raise InvalidVariantError(resolution.error)
+    if not resolution.normalized:
         raise InvalidVariantError("Variant normalization returned no result.")
 
-    alternatives = [item.strip() for item in normalized_variant.split(",") if item.strip()]
+    alternatives = [item.strip() for item in resolution.normalized.split(",") if item.strip()]
     if not alternatives:
         raise InvalidVariantError("Variant normalization returned no valid alternatives.")
 
     selected_variant = alternatives[0]
     normalized_input = variant_str.strip().replace(" ", "")
 
-    message = None
-    warnings: list[str] = []
-    if selected_variant != normalized_input:
+    message = resolution.message
+    warnings: list[str] = list(resolution.warnings)
+    if not resolution.needs_confirmation and message is None and selected_variant != normalized_input:
         message = f"Normalized from {normalized_input}"
     if len(alternatives) > 1:
         warnings.append("Multiple normalized alternatives were returned.")
@@ -266,6 +271,10 @@ def normalize_variant_str(variant_str: str, organism_label: str) -> NormalizedVa
         alternatives=alternatives,
         message=message,
         warnings=warnings,
+        needs_confirmation=resolution.needs_confirmation,
+        mapped_position=resolution.mapped_position,
+        given_ref=resolution.given_ref,
+        actual_ref=resolution.actual_ref,
     )
 
 

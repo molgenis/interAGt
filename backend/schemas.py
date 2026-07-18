@@ -68,12 +68,21 @@ class NormalizeRequest(BaseModel):
     organism: str = "Human (hg38)"
 
 
+class VariantConfirmation(BaseModel):
+    mapped_position: str
+    given_ref: str
+    actual_ref: str
+    message: str
+
+
 class NormalizeResponse(BaseModel):
     input: str
     normalized: str
     alternatives: list[str]
     message: Optional[str] = None
     warnings: list[str] = Field(default_factory=list)
+    needs_confirmation: bool = False
+    confirmation: Optional[VariantConfirmation] = None
 
 
 class ScoreRequest(BaseModel):

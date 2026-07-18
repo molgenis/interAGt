@@ -17,6 +17,7 @@ from backend.schemas import (
     TracksPlotResponse,
     TracksRequest,
     TracksResponse,
+    VariantConfirmation,
 )
 
 
@@ -89,12 +90,22 @@ variants_router = APIRouter()
 @variants_router.post("/normalize", response_model=NormalizeResponse)
 def normalize(payload: NormalizeRequest) -> NormalizeResponse:
     result = services.normalize_variant_str(payload.variant, payload.organism)
+    confirmation = None
+    if result.needs_confirmation:
+        confirmation = VariantConfirmation(
+            mapped_position=result.mapped_position or "",
+            given_ref=result.given_ref or "",
+            actual_ref=result.actual_ref or "",
+            message=result.message or "",
+        )
     return NormalizeResponse(
         input=result.input,
         normalized=result.normalized,
         alternatives=result.alternatives,
         message=result.message,
         warnings=result.warnings,
+        needs_confirmation=result.needs_confirmation,
+        confirmation=confirmation,
     )
 
 

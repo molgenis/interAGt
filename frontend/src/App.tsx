@@ -29,6 +29,14 @@ import {
 import { Separator } from '@/ui/separator'
 import { Tabs, TabsList, TabsTrigger } from '@/ui/tabs'
 import { Input } from '@/ui/input'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/ui/dialog'
 
 const DEFAULT_ORGANISM_VALUE = 'HOMO_SAPIENS'
 const FALLBACK_ORGANISM_LABEL = 'Human (hg38)'
@@ -94,6 +102,7 @@ export default function App() {
   const [selectedHpoTerms, setSelectedHpoTerms] = useState<string[]>([])
   const [selectedTissues, setSelectedTissues] = useState<string[]>([])
   const [selectedTracks, setSelectedTracks] = useState<string[]>([])
+  const [pendingAction, setPendingAction] = useState<Mode | null>(null)
 
   const organismsQuery = useOrganisms()
   const organisms = organismsQuery.data?.organisms ?? []
@@ -133,6 +142,8 @@ export default function App() {
   const normalization = normalizationQuery.data
   const alternatives = normalization?.alternatives ?? []
   const normalizedVariant = selectedAlternative ?? normalization?.normalized ?? ''
+  const needsConfirmation = Boolean(normalization?.needs_confirmation)
+  const confirmation = normalization?.confirmation ?? null
 
   const availableScorers = tracksQuery.data?.available_scorers ?? ['RNA_SEQ']
   const excludedTracks = tracksQuery.data?.excluded_from_visualization ?? []
@@ -154,7 +165,7 @@ export default function App() {
     selectedTracks.length > 0 &&
     !trackPlotMutation.isPending
 
-  function handleScore() {
+  function runScore() {
     scoreMutation.mutate({
       api_key: apiKey,
       organism: organismValue,
@@ -165,7 +176,7 @@ export default function App() {
     })
   }
 
-  function handleVisualize() {
+  function runVisualize() {
     trackPlotMutation.mutate({
       api_key: apiKey,
       organism: organismValue,
@@ -174,6 +185,31 @@ export default function App() {
       ontology_terms: selectedTissues.map(curieFromDisplay),
       tracks: selectedTracks,
     })
+  }
+
+  // A reference-base mismatch is confirmed before running: open the dialog
+  // instead of firing the mutation directly.
+  function handleScore() {
+    if (needsConfirmation) {
+      setPendingAction('scores')
+      return
+    }
+    runScore()
+  }
+
+  function handleVisualize() {
+    if (needsConfirmation) {
+      setPendingAction('tracks')
+      return
+    }
+    runVisualize()
+  }
+
+  function confirmProceed() {
+    const action = pendingAction
+    setPendingAction(null)
+    if (action === 'scores') runScore()
+    else if (action === 'tracks') runVisualize()
   }
 
   const scoreData = scoreMutation.data
@@ -236,10 +272,18 @@ export default function App() {
                   {(normalizationQuery.error as Error).message}
                 </p>
               )}
-              {normalization?.message && (
-                <p className="text-xs text-muted-foreground">
-                  {normalization.message}: {normalizedVariant}
+              {needsConfirmation && confirmation ? (
+                <p className="text-xs text-amber-600 dark:text-amber-500">
+                  Reference mismatch at {confirmation.mapped_position}: genome
+                  base is {confirmation.actual_ref}, not{' '}
+                  {confirmation.given_ref}. You'll be asked to confirm.
                 </p>
+              ) : (
+                normalization?.message && (
+                  <p className="text-xs text-muted-foreground">
+                    {normalization.message}: {normalizedVariant}
+                  </p>
+                )
               )}
             </div>
 
@@ -446,6 +490,47 @@ export default function App() {
           )}
         </main>
       </div>
+
+      <Dialog
+        open={pendingAction !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingAction(null)
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirm reference mismatch</DialogTitle>
+            <DialogDescription>
+              {confirmation?.message ??
+                'The reference base does not match the genome at this position.'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-lg border bg-muted/40 px-3 py-2 text-sm">
+            <div className="flex justify-between gap-4">
+              <span className="text-muted-foreground">Mapped position</span>
+              <span className="font-mono">{confirmation?.mapped_position}</span>
+            </div>
+            <div className="mt-1 flex justify-between gap-4">
+              <span className="text-muted-foreground">Your reference</span>
+              <span className="font-mono">{confirmation?.given_ref}</span>
+            </div>
+            <div className="mt-1 flex justify-between gap-4">
+              <span className="text-muted-foreground">Genome reference</span>
+              <span className="font-mono">{confirmation?.actual_ref}</span>
+            </div>
+            <div className="mt-2 border-t pt-2 flex justify-between gap-4">
+              <span className="text-muted-foreground">Will run</span>
+              <span className="font-mono">{normalizedVariant}</span>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPendingAction(null)}>
+              Cancel
+            </Button>
+            <Button onClick={confirmProceed}>Proceed with my input</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

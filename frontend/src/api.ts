@@ -30,12 +30,21 @@ export interface TracksResponse {
   available_scorers: string[]
 }
 
+export interface VariantConfirmation {
+  mapped_position: string
+  given_ref: string
+  actual_ref: string
+  message: string
+}
+
 export interface NormalizeResponse {
   input: string
   normalized: string
   alternatives: string[]
   message: string | null
   warnings: string[]
+  needs_confirmation: boolean
+  confirmation: VariantConfirmation | null
 }
 
 export type ScoreRow = Record<string, string | number | boolean | null>
