@@ -464,7 +464,7 @@ export default function App() {
               />
             )
           ) : trackPayload ? (
-            <div className="space-y-4">
+            <div className="rounded-lg border p-6 space-y-4">
               <DownloadHtmlButton
                 fileName={`${normalizedVariant}_tracks.html`}
                 payload={trackPayload}

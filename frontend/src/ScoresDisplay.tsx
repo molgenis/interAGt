@@ -112,11 +112,13 @@ function BarPanel({
       layout={themedLayout(theme, {
         title: { text: title },
         height: 360,
-        margin: { l: 50, r: 20, t: 50, b: 130 },
+        automargin: true,
+        margin: { l: 100, r: 20, t: 50, b: 180 },
         xaxis: {
           ...themedAxis(theme),
-          title: { text: 'Tissue' },
-          tickangle: -45,
+          title: { text: '' },
+          tickangle: -65,
+          tickfont: { size: 9 },
           categoryorder: 'array',
           categoryarray: x,
         },
@@ -196,20 +198,25 @@ export function ScoresSummaryCharts({
           )
 
         return (
-          <div key={outputType} className="space-y-3">
-            <h3 className="text-lg font-semibold">{outputType}</h3>
-            {explanations?.[outputType] && (
-              <div
-                role="alert"
-                className="rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 text-sm"
-              >
-                {explanations[outputType]}
-              </div>
-            )}
-            {chart}
-          </div>
+          <details className="rounded-lg border p-4" open>
+            <summary className="cursor-pointer text-sm font-semibold">
+                    {outputType}
+                  </summary>
+            <div key={outputType} className="mt-4 space-y-3">
+              {explanations?.[outputType] && (
+                <div
+                  role="alert"
+                  className="rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 text-sm"
+                >
+                  {explanations[outputType]}
+                </div>
+              )}
+              {chart}
+            </div>
+          </details>
         )
       })}
     </div>
+    
   )
 }
