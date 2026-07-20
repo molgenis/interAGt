@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Plot, PLOTLY_CONFIG, plotTheme, themedAxis, themedLayout } from '@/plotly'
+import { Plot, PLOTLY_CONFIG, plotTheme, themedAxis, themedLayout, themedHoverLabel } from '@/plotly'
 import type { ScoreRow, TrackExplanations } from '@/api'
 
 // ── ScoresTable ──────────────────────────────────────────────────────────────
@@ -97,6 +97,9 @@ function BarPanel({
   const x = sorted.map((r) => String(r.biosample_name ?? ''))
   const y = sorted.map((r) => toNumber(r.raw_score))
   const colors = y.map((v) => (v < 0 ? NEGATIVE_COLOR : POSITIVE_COLOR))
+  const validY = y.filter((v): v is number => v !== null && v !== undefined && !isNaN(v));
+  const minY = validY.length > 0 ? Math.min(...validY) : 0;
+  const maxY = validY.length > 0 ? Math.max(...validY) : 0;
 
   return (
     <Plot
@@ -113,7 +116,7 @@ function BarPanel({
         title: { text: title },
         height: 360,
         automargin: true,
-        margin: { l: 100, r: 20, t: 50, b: 180 },
+        margin: { l: 100, r: 20, t: 50, b: 185 },
         xaxis: {
           ...themedAxis(theme),
           title: { text: '' },
@@ -121,16 +124,22 @@ function BarPanel({
           tickfont: { size: 9 },
           categoryorder: 'array',
           categoryarray: x,
+          range: [-1, x.length] // Padding: 1 unit on each side
         },
-        yaxis: { ...themedAxis(theme), title: { text: 'raw_score' } },
+        yaxis: {
+          ...themedAxis(theme),
+          title: { text: 'raw_score' },
+          range: [Math.min(minY, -0.2), Math.max(maxY, 0.2)],
+        },
+        hoverlabel: themedHoverLabel(theme),
         showlegend: false,
       })}
       config={PLOTLY_CONFIG}
       style={{ width: '100%' }}
       useResizeHandler
     />
-  )
-}
+    )
+  }
 
 function FacetGrid({
   rows,
@@ -149,13 +158,19 @@ function FacetGrid({
     else groups.set(key, [row])
   }
 
+  const numGroups = groups.size;
+  const cols = numGroups <= 2 ? numGroups : Math.min(3, Math.ceil(numGroups / 2));
+
   return (
-    <div className="grid grid-cols-1 gap-4">
+    <div
+      className="gap-4"
+      style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)` }}
+    >
       {[...groups.entries()].map(([name, groupRows]) => (
         <BarPanel key={name} title={name} rows={groupRows} isDark={isDark} />
       ))}
     </div>
-  )
+  );
 }
 
 export function ScoresSummaryCharts({
@@ -199,7 +214,7 @@ export function ScoresSummaryCharts({
 
         return (
           <details className="rounded-lg border p-4" open>
-            <summary className="cursor-pointer text-sm font-semibold">
+            <summary className="cursor-pointer text-sm">
                     {outputType}
                   </summary>
             <div key={outputType} className="mt-4 space-y-3">

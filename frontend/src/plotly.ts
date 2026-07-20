@@ -6,6 +6,7 @@ export const Plot = createPlotlyComponent(Plotly)
 export const PLOTLY_CONFIG = {
   displaylogo: false,
   responsive: true,
+  displayModeBar: false 
 } as const
 
 export interface PlotTheme {
@@ -54,5 +55,12 @@ export function themedAxis(theme: PlotTheme): Record<string, unknown> {
     gridcolor: theme.grid,
     linecolor: theme.grid,
     zerolinecolor: theme.grid,
+  }
+}
+
+export function themedHoverLabel(theme: PlotTheme): Record<string, unknown> {
+  return {
+    bgcolor: theme.surface,
+    font: { color: theme.fg }
   }
 }

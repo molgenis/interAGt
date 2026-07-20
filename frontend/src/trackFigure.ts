@@ -8,7 +8,7 @@ import type {
   TrackSpec,
 } from '@/api'
 import { buildTranscriptObjects, CDS_HEIGHT, TRACK_SPACING } from '@/transcriptFigure'
-import { plotTheme, themedAxis, themedLayout, type PlotTheme } from '@/plotly'
+import { plotTheme, themedAxis, themedLayout, themedHoverLabel, type PlotTheme } from '@/plotly'
 
 const REF_COLOR = '#999'
 const ALT_COLOR = '#FF0C57'
@@ -287,6 +287,7 @@ export function buildTrackFigure(
     legend: { orientation: 'h', yanchor: 'bottom', y: 1.02, xanchor: 'right', x: 1 },
     shapes,
     annotations,
+    hoverlabel: themedHoverLabel(theme),
     margin: { l: 60, r: 30, t: 40, b: 60 },
     grid: {
       rows: nSubplots,
