@@ -289,7 +289,7 @@ export default function App() {
 
             {alternatives.length > 1 && (
               <div className="grid gap-2">
-                <Label htmlFor="alternative">Select a single variant</Label>
+                <Label htmlFor="alternative">Multiple options for rsID, select one variant</Label>
                 <Select
                   value={normalizedVariant}
                   onValueChange={setSelectedAlternative}

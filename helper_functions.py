@@ -69,6 +69,9 @@ def resolve_variant(
         # ========== 3. HGVS cDNA/nRNA ==========
         if re.match(r'^(?:[A-Za-z0-9]+\()?([A-Z_]+\d+\.\d+)(?:\))?:[cnCN]\.(-?\d+[\+\-]?\d*(?:_-?\d+[\+\-]?\d*)?)(?:([ACGT]+)>|del\s*ins)([ACGT]+)$', variant_str):
             return _convert_hgvs(variant_str)
+        
+        if re.match(r'^rs\d+$', variant_str):
+               return _convert_rsid(variant_str)
 
     return VariantResolution(error=f"Unsupported format: {variant_str}")
 
@@ -117,6 +120,46 @@ def _convert_hgvs(hgvs: str, genome_build: str = "GRCh38") -> VariantResolution:
     # Precedence 3: hard error, translated to a readable sentence.
     return VariantResolution(error=_translate_warnings(warnings, hgvs))
 
+
+def _convert_rsid(rsid: str, species: str = "homo_sapiens" ) -> VariantResolution:
+    """Lookup rsID via Ensembl REST API, handling multi-allelic variants."""
+    server = "https://rest.ensembl.org"
+    try:
+        r = requests.get(f"{server}/variation/{species}/{rsid}?",
+                         headers={"Content-Type": "application/json"})
+        r.raise_for_status()
+        data = r.json()
+
+        if not (mappings := data.get('mappings')):
+            return VariantResolution(error=f"Could not resolve {rsid}")
+
+        # Process all mappings (for different genome builds)
+        results = []
+        for m in mappings:
+            chr_name = _normalize_chromosome(m['seq_region_name'])
+            pos = m['start']
+            allelestr = m.get('allele_string', '')
+
+            # Handle multi-allelic: G/A/C → [G, A, C]
+            alleles = allelestr.split('/') if '/' in allelestr else [allelestr]
+
+            if not alleles:
+                continue
+
+            # Reference is first allele, each subsequent is an alternate
+            ref = alleles[0]
+            if chr_name.startswith("chr"):
+                for alt in alleles[1:]:
+                    results.append(f"{chr_name}:{pos}:{ref}:{alt}")
+
+        if not results:
+            return VariantResolution(error=f"VariantValidator error: No valid variants found for {rsid}") 
+
+        # Return first result (or could return all as comma-separated)
+        return VariantResolution(normalized=','.join(results))
+
+    except Exception as e:
+        return VariantResolution(error=f"Ensembl API error: {str(e)}")
 
 def _iter_records(data: dict):
     """Yield the per-variant record values from a VV response."""
