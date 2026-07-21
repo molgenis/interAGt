@@ -67,7 +67,7 @@ def resolve_variant(
             return _convert_hgvs(variant_str)
 
         # ========== 3. HGVS cDNA/nRNA ==========
-        if re.match(r'^(?:[A-Za-z0-9]+\()?([A-Z_]+\d+\.\d+)(?:\))?:[cnCN]\.(-?\d+[\+\-]?\d*(?:_-?\d+[\+\-]?\d*)?)(?:([ACGT]+)>|del\s*ins)([ACGT]+)$', variant_str):
+        if re.match(r'^(?:[A-Za-z0-9]+\()?([A-Z_]+\d+\.\d+)(?:\))?:[cnCN]\.(-?\d+[\+\-]?\d*(?:_-?\d+[\+\-]?\d*)?)(?:([ACGT]+)>|del\s*ins|del)([ACGT]*)$', variant_str):
             return _convert_hgvs(variant_str)
         
         if re.match(r'^rs\d+$', variant_str):

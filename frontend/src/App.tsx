@@ -280,7 +280,7 @@ export default function App() {
                 </p>
               ) : (
                 normalization?.message && (
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-muted-foreground break-all">
                     {normalization.message}: {normalizedVariant}
                   </p>
                 )
