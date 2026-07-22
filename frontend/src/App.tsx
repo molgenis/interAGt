@@ -219,7 +219,7 @@ export default function App() {
   return (
     <div className="flex h-full flex-col">
       <header className="flex shrink-0 items-center gap-4 border-b px-4 py-3">
-        <img src="/logo_interAGt.svg" alt="interAGt" className="h-8" />
+        <img src="/logo_interAGt.svg" alt="interAGt" className="h-12" />
         <span className="hidden text-sm text-muted-foreground lg:inline">
           An intuitive interface to AlphaGenome
         </span>
@@ -257,10 +257,32 @@ export default function App() {
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="variant">Variant</Label>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="variant">Variant</Label>
+                <div className="group relative">
+                  <svg xmlns="http://www.w3.org/2000/svg"
+                      className="h-4 w-4 text-muted-foreground"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                  </svg>
+                  <div className="absolute hidden rounded border bg-popover w-64 p-2 text-xs group-hover:block">
+                    Variant notation<br/>
+                    chrom:pos:ref:alt (human/mouse)<br/>
+                    Human only: HGVS or rsID<br/>
+                    Examples: chr1:12345:A:T, NM_001234.5:c.123A&gt;T, rs12345
+                  </div>
+                </div>
+              </div>
               <Input
                 id="variant"
-                placeholder="chr:pos:ref:alt or rsID"
+                placeholder="chr:pos:ref:alt, HGVS, or rsID"
                 value={variantInput}
                 onChange={(e) => {
                   setVariantInput(e.target.value)
