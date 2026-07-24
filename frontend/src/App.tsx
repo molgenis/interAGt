@@ -29,6 +29,7 @@ import {
 import { Separator } from '@/ui/separator'
 import { Tabs, TabsList, TabsTrigger } from '@/ui/tabs'
 import { Input } from '@/ui/input'
+import { CheckList } from '@/CheckList'
 import {
   Dialog,
   DialogContent,
@@ -231,7 +232,7 @@ export default function App() {
 
       <div className="flex min-h-0 flex-1">
         {/* Left panel: inputs */}
-        <aside className="w-[22rem] shrink-0 overflow-y-auto border-r p-4">
+        <aside className="flex w-[22rem] shrink-0 flex-col overflow-y-auto border-r p-4">
           <Tabs value={mode} onValueChange={(v) => setMode(v as Mode)}>
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="scores">Scores</TabsTrigger>
@@ -242,18 +243,15 @@ export default function App() {
           <div className="mt-4 grid gap-4">
             <div className="grid gap-2">
               <Label htmlFor="organism">Organism</Label>
-              <Select value={organismValue} onValueChange={setOrganismValue}>
-                <SelectTrigger id="organism">
-                  <SelectValue placeholder="Select organism" />
-                </SelectTrigger>
-                <SelectContent>
+              <Tabs value={organismValue} onValueChange={setOrganismValue}>
+                <TabsList id="organism" className="grid w-full grid-cols-2">
                   {organisms.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>
+                    <TabsTrigger key={o.value} value={o.value}>
                       {o.label}
-                    </SelectItem>
+                    </TabsTrigger>
                   ))}
-                </SelectContent>
-              </Select>
+                </TabsList>
+              </Tabs>
             </div>
 
             <div className="grid gap-2">
@@ -353,14 +351,11 @@ export default function App() {
             {mode === 'scores' ? (
               <>
                 <div className="grid gap-2">
-                  <Label htmlFor="scorers">Variant scorers</Label>
-                  <MultiSelect
-                    id="scorers"
+                  <Label>Variant scorers</Label>
+                  <CheckList
                     options={availableScorers}
                     selected={selectedScorers}
                     onChange={setSelectedScorers}
-                    placeholder="Select scorers…"
-                    searchable={false}
                   />
                 </div>
 
@@ -376,20 +371,6 @@ export default function App() {
                       disabled={hpoOptions.length === 0}
                     />
                   </div>
-                )}
-
-                <Button onClick={handleScore} disabled={!canScore}>
-                  {scoreMutation.isPending && (
-                    <Loader2 className="size-4 animate-spin" />
-                  )}
-                  {scoreMutation.isPending ? 'Scoring…' : 'Get variant scores'}
-                </Button>
-
-                {scoreMutation.isError && (
-                  <ErrorNote
-                    title="Scoring failed"
-                    message={(scoreMutation.error as Error).message}
-                  />
                 )}
               </>
             ) : (
@@ -413,17 +394,37 @@ export default function App() {
                 </div>
 
                 <div className="grid gap-2">
-                  <Label htmlFor="tracks">Tracks</Label>
-                  <MultiSelect
-                    id="tracks"
+                  <Label>Tracks</Label>
+                  <CheckList
                     options={visualizationTracks}
                     selected={selectedTracks}
                     onChange={setSelectedTracks}
-                    placeholder="Search & select tracks…"
-                    disabled={visualizationTracks.length === 0}
+                    emptyMessage="No tracks available."
                   />
                 </div>
+              </>
+            )}
+          </div>
 
+          <div className="mt-auto grid gap-2 pt-4">
+            {mode === 'scores' ? (
+              <>
+                <Button onClick={handleScore} disabled={!canScore}>
+                  {scoreMutation.isPending && (
+                    <Loader2 className="size-4 animate-spin" />
+                  )}
+                  {scoreMutation.isPending ? 'Scoring…' : 'Get variant scores'}
+                </Button>
+
+                {scoreMutation.isError && (
+                  <ErrorNote
+                    title="Scoring failed"
+                    message={(scoreMutation.error as Error).message}
+                  />
+                )}
+              </>
+            ) : (
+              <>
                 <Button onClick={handleVisualize} disabled={!canVisualize}>
                   {trackPlotMutation.isPending && (
                     <Loader2 className="size-4 animate-spin" />

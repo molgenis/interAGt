@@ -1,10 +1,4 @@
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/ui/select'
+import { Tabs, TabsList, TabsTrigger } from '@/ui/tabs'
 
 // Keep in sync with SEQUENCE_LENGTHS in backend/schemas.py.
 export const SEQUENCE_LENGTHS = [16384, 131072, 524288, 1048576] as const
@@ -27,20 +21,17 @@ export function SeqLengthSelect({
   onChange: (v: SequenceLength) => void
 }) {
   return (
-    <Select
+    <Tabs
       value={String(value)}
       onValueChange={(v) => onChange(Number(v) as SequenceLength)}
     >
-      <SelectTrigger id={id}>
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
+      <TabsList id={id} className="grid w-full grid-cols-4">
         {SEQUENCE_LENGTHS.map((length) => (
-          <SelectItem key={length} value={String(length)}>
+          <TabsTrigger key={length} value={String(length)}>
             {formatLabel(length)}
-          </SelectItem>
+          </TabsTrigger>
         ))}
-      </SelectContent>
-    </Select>
+      </TabsList>
+    </Tabs>
   )
 }
