@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 150" width="400" height="150">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 150">
   <defs>
     <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" style="stop-color:#FF0C57;stop-opacity:1" />
@@ -7,11 +7,10 @@
   </defs>
 
 
-  <!-- Text inside the strand with AG darker, all together -->
-  <text x="150" y="95" font-family="'PT Sans', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" 
-        font-size="48" font-weight="600" fill="#6C757D">
-    inter<tspan fill="#212529" font-weight="700">AG</tspan>t
-  </text>
+<text x="150" y="95" font-family="'PT Sans', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif"
+      font-size="48" font-weight="600" fill="#9f9f9fff">
+  inter<tspan fill="#6a6a6aff" opacity="0.9" font-weight="700">AG</tspan>t
+</text>
   
   <!-- Single DNA strand (wavy line) -->
   <path d="M50,75 Q75,40 100,40 T140,110 T180,75 T220,40" 

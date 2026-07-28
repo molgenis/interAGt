@@ -197,19 +197,19 @@ function post<T>(path: string, payload: unknown): Promise<T> {
 }
 
 const api = {
-  getOrganisms: () => request<OrganismsResponse>('/metadata/organisms'),
-  getHpoTerms: () => request<HpoTermsResponse>('/metadata/hpo-terms'),
+  getOrganisms: () => request<OrganismsResponse>('/api/metadata/organisms'),
+  getHpoTerms: () => request<HpoTermsResponse>('/api/metadata/hpo-terms'),
   getTrackExplanations: () =>
-    request<TrackExplanations>('/metadata/track-explanations'),
+    request<TrackExplanations>('/api/metadata/track-explanations'),
   postOntologyTerms: (apiKey: string, organism: string) =>
-    post<OntologyTermsResponse>('/metadata/ontology-terms', {
+    post<OntologyTermsResponse>('/api/metadata/ontology-terms', {
       api_key: apiKey,
       organism,
     }),
   postTracks: (apiKey: string, organism: string) =>
-    post<TracksResponse>('/metadata/tracks', { api_key: apiKey, organism }),
+    post<TracksResponse>('/api/metadata/tracks', { api_key: apiKey, organism }),
   postNormalize: (variant: string, organism: string) =>
-    post<NormalizeResponse>('/variants/normalize', { variant, organism }),
+    post<NormalizeResponse>('/api/variants/normalize', { variant, organism }),
   postScore: (payload: {
     api_key: string
     organism: string
@@ -217,7 +217,7 @@ const api = {
     sequence_length: number
     scorers: string[]
     hpo_terms: string[]
-  }) => post<ScoreResponse>('/variants/score', payload),
+  }) => post<ScoreResponse>('/api/variants/score', payload),
   postTrackPlot: (payload: {
     api_key: string
     organism: string
@@ -225,7 +225,7 @@ const api = {
     sequence_length: number
     ontology_terms: string[]
     tracks: string[]
-  }) => post<TrackPlotResponse>('/plots/tracks', payload),
+  }) => post<TrackPlotResponse>('/api/plots/tracks', payload),
 }
 
 // ── Hooks ────────────────────────────────────────────────────────────────────
