@@ -52,6 +52,7 @@ def main():
     if args.dev:
         # Start Bun dev server
         frontend_src = Path(__file__).parent / "frontend"
+        build_and_copy_frontend()
         print("Starting frontend development server (Bun) on port 5173...")
         frontend_process = subprocess.Popen(
             ["bun", "run", "preview"],
