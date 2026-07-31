@@ -55,6 +55,7 @@ function lineTrace(
     x,
     y,
     name,
+    legendgroup: name,
     line: { color, width: 1.5 },
     showlegend,
     hovertemplate: 'Position: %{x}<br>Value: %{y:.2f}<extra></extra>',
@@ -250,12 +251,14 @@ export function buildTrackFigure(
   const annotations: unknown[] = []
 
   // Build track objects
+  let shownContinuousLegend = false
   for (let idx = 0; idx < tracks.length; idx++) {
     const spec = tracks[idx]
     const row = idx + 1
 
     if (spec.type === 'continuous') {
-      data.push(...buildContinuousTraces(spec, row, idx === 0))
+      data.push(...buildContinuousTraces(spec, row, !shownContinuousLegend))
+      shownContinuousLegend = true
     } else if (spec.type === 'sashimi') {
       const result = buildSashimiObjects(spec, row, theme)
       shapes.push(...result.shapes)
@@ -284,7 +287,14 @@ export function buildTrackFigure(
   const layout: Record<string, unknown> = themedLayout(theme, {
     height: 500 + 120 * totalHeight,
     hovermode: 'x unified',
-    legend: { orientation: 'h', yanchor: 'bottom', y: 1.02, xanchor: 'right', x: 1 },
+    legend: {
+      orientation: 'h',
+      yanchor: 'bottom',
+      y: 1.02,
+      xanchor: 'right',
+      x: 1,
+      title: { text: 'Click to toggle:', side: 'left', font: { size: 11, color: theme.muted } },
+    },
     shapes,
     annotations,
     hoverlabel: themedHoverLabel(theme),
