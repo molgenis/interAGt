@@ -212,10 +212,10 @@ export function ScoresSummaryCharts({
           )
 
         return (
-          <details className="rounded-lg border p-4" open>
+          <details key={outputType} className="rounded-lg border p-4" open>
             <summary className="cursor-pointer text-sm">
-                    {outputType}
-                  </summary>
+              {outputType}
+            </summary>
             <div key={outputType} className="mt-4 space-y-3">
               {explanations?.[outputType] && (
                 <div
