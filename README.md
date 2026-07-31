@@ -40,14 +40,20 @@ For more details, see the [AlphaGenome Documentation](https://www.alphagenomedoc
 python app_launcher.py
 ```
 
-**Run in development mode** (with live frontend reload):
+**Run in preview mode** (serves the last built frontend on its own port, no rebuild needed):
 ```bash
 python app_launcher.py --dev
 ```
 
 The app will be available at:
 - Production: `http://localhost:8000`
-- Development: Frontend at `http://localhost:4173`, Backend at `http://localhost:8000`
+- Preview: Frontend at `http://localhost:4173`, Backend at `http://localhost:8000`
+
+For live frontend reload (HMR) while editing, run the frontend and backend dev servers directly instead:
+```bash
+cd frontend && bun run dev       # http://localhost:5173, hot reload
+.venv/bin/uvicorn backend.main:app --reload   # http://localhost:8000
+```
 
 ---
 
