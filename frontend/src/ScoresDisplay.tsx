@@ -150,21 +150,21 @@ function FacetGrid({
   field: string
   isDark: boolean
 }) {
-  const groups = new Map<string, ScoreRow[]>()
+  const groups = new Map<string, ScoreRow[]>();
   for (const row of rows) {
-    const key = String(row[field] ?? '—')
-    const existing = groups.get(key)
-    if (existing) existing.push(row)
-    else groups.set(key, [row])
+    const key = String(row[field] ?? '—');
+    const existing = groups.get(key);
+    if (existing) existing.push(row);
+    else groups.set(key, [row]);
   }
-
-  const numGroups = groups.size;
-  const cols = numGroups <= 2 ? numGroups : Math.min(3, Math.ceil(numGroups / 2));
 
   return (
     <div
-      className="gap-4"
-      style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)` }}
+      className="gap-4 w-full"
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(max(250px, calc(100% / 4)), 1fr))'
+      }}
     >
       {[...groups.entries()].map(([name, groupRows]) => (
         <BarPanel key={name} title={name} rows={groupRows} isDark={isDark} />
@@ -172,7 +172,6 @@ function FacetGrid({
     </div>
   );
 }
-
 export function ScoresSummaryCharts({
   rows,
   outputTypes,
