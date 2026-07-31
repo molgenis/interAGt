@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { BarChart3, Info, KeyRound, LineChart, Loader2 } from 'lucide-react'
 import {
   useOrganisms,
-  useTrackExplanations,
   useHpoTerms,
   useVariantNormalization,
   useOntologyTerms,
@@ -10,6 +9,7 @@ import {
   useVariantScores,
   useTrackPlot,
 } from '@/api'
+import { TRACK_EXPLANATIONS } from '@/trackExplanations'
 import { ApiKeyDialog } from '@/ApiKeyDialog'
 import { MultiSelect } from '@/MultiSelect'
 import { SeqLengthSelect, type SequenceLength } from '@/SeqLengthSelect'
@@ -112,7 +112,6 @@ export default function App() {
   const organismLabel = currentOrganism?.label ?? FALLBACK_ORGANISM_LABEL
   const isHuman = organismLabel === FALLBACK_ORGANISM_LABEL
 
-  const trackExplanationsQuery = useTrackExplanations()
   const hpoTermsQuery = useHpoTerms(isHuman)
   const normalizationQuery = useVariantNormalization(variantInput, organismLabel)
   const ontologyQuery = useOntologyTerms(apiKey, organismValue)
@@ -216,7 +215,7 @@ export default function App() {
 
   const scoreData = scoreMutation.data
   const trackPayload = trackPlotMutation.data ?? null
-  const trackExplanations = trackExplanationsQuery.data
+  const trackExplanations = TRACK_EXPLANATIONS
 
   return (
     <div className="flex h-full flex-col">

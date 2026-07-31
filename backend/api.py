@@ -45,11 +45,6 @@ def organisms() -> dict:
     return {"organisms": services.get_organisms()}
 
 
-@metadata_router.get("/track-explanations")
-def track_explanations() -> dict[str, str]:
-    return services.get_track_explanations()
-
-
 @metadata_router.get("/hpo-terms", response_model=HpoTermsResponse)
 def hpo_terms() -> dict:
     return {"terms": services.get_hpo_terms()}

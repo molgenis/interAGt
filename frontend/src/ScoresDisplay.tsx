@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { Plot, PLOTLY_CONFIG, plotTheme, themedAxis, themedLayout, themedHoverLabel } from '@/plotly'
-import type { ScoreRow, TrackExplanations } from '@/api'
+import type { ScoreRow } from '@/api'
+import type { TrackExplanations } from '@/trackExplanations'
 
 // ── ScoresTable ──────────────────────────────────────────────────────────────
 

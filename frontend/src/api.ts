@@ -16,8 +16,6 @@ export interface HpoTermsResponse {
   terms: string[]
 }
 
-export type TrackExplanations = Record<string, string>
-
 export interface OntologyTermsResponse {
   curie_to_label: Record<string, string>
   display_options: string[]
@@ -199,8 +197,6 @@ function post<T>(path: string, payload: unknown): Promise<T> {
 const api = {
   getOrganisms: () => request<OrganismsResponse>('/metadata/organisms'),
   getHpoTerms: () => request<HpoTermsResponse>('/metadata/hpo-terms'),
-  getTrackExplanations: () =>
-    request<TrackExplanations>('/metadata/track-explanations'),
   postOntologyTerms: (apiKey: string, organism: string) =>
     post<OntologyTermsResponse>('/metadata/ontology-terms', {
       api_key: apiKey,
@@ -234,14 +230,6 @@ export function useOrganisms() {
   return useQuery({
     queryKey: ['organisms'],
     queryFn: api.getOrganisms,
-    staleTime: Infinity,
-  })
-}
-
-export function useTrackExplanations() {
-  return useQuery({
-    queryKey: ['track-explanations'],
-    queryFn: api.getTrackExplanations,
     staleTime: Infinity,
   })
 }
