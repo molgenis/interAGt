@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { BarChart3, KeyRound, LineChart, Loader2 } from 'lucide-react'
+import { BarChart3, Info, KeyRound, LineChart, Loader2 } from 'lucide-react'
 import {
   useOrganisms,
   useTrackExplanations,
@@ -27,6 +27,7 @@ import {
   SelectValue,
 } from '@/ui/select'
 import { Separator } from '@/ui/separator'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/ui/tooltip'
 import { Tabs, TabsList, TabsTrigger } from '@/ui/tabs'
 import { Input } from '@/ui/input'
 import { CheckList } from '@/CheckList'
@@ -257,26 +258,17 @@ export default function App() {
             <div className="grid gap-2">
               <div className="flex items-center gap-2">
                 <Label htmlFor="variant">Variant</Label>
-                <div className="group relative">
-                  <svg xmlns="http://www.w3.org/2000/svg"
-                      className="h-4 w-4 text-muted-foreground"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                      />
-                  </svg>
-                  <div className="absolute hidden rounded border bg-popover w-64 p-2 text-xs group-hover:block">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="h-4 w-4 text-muted-foreground" />
+                  </TooltipTrigger>
+                  <TooltipContent className="w-64 rounded border bg-popover p-2 text-xs text-popover-foreground">
                     Variant notation<br/>
                     chrom:pos:ref:alt (human/mouse)<br/>
                     Human only: HGVS or rsID<br/>
                     Examples: chr1:12345:A:T, NM_001234.5:c.123A&gt;T, rs12345
-                  </div>
-                </div>
+                  </TooltipContent>
+                </Tooltip>
               </div>
               <Input
                 id="variant"
