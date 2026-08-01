@@ -28,7 +28,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/ui/select'
-import { Separator } from '@/ui/separator'
 import { Tabs, TabsList, TabsTrigger } from '@/ui/tabs'
 import { Input } from '@/ui/input'
 import { CheckList } from '@/CheckList'
@@ -256,7 +255,7 @@ export default function App() {
                       Human predictions use the hg38 (GRCh38.p13) genome
                       build; mouse predictions use mm10 (GRCm38.p6). No other
                       species are supported. AlphaGenome is licensed for
-                      non-commercial use only — see About.
+                      non-commercial use only; see About.
                     </>
                   }
                 />
@@ -359,108 +358,87 @@ export default function App() {
                 value={sequenceLength}
                 onChange={setSequenceLength}
               />
-              <p className="text-xs text-muted-foreground">
-                Sequence context around the variant used for prediction.
-              </p>
             </div>
-
-            <Separator />
-
             {!apiKey && (
               <p className="text-xs text-muted-foreground">
                 Add an API key to load organism-specific options.
               </p>
             )}
 
-            {mode === 'scores' ? (
-              <>
-                <div className="grid gap-2">
-                  <Label>Variant scorers</Label>
-                  <CheckList
-                    options={availableScorers}
-                    selected={selectedScorers}
-                    onChange={setSelectedScorers}
-                    descriptions={SCORER_EXPLANATIONS}
-                  />
-                  {!isHuman && (
-                    <p className="text-xs text-muted-foreground">
-                      Polyadenylation scoring is human-only and hidden for
-                      Mouse.
-                    </p>
-                  )}
-                </div>
+            <div className="grid gap-2">
+              <Label>Tracks</Label>
+              <CheckList
+                options={mode === 'scores' ? availableScorers : visualizationTracks}
+                selected={mode === 'scores' ? selectedScorers : selectedTracks}
+                onChange={mode === 'scores' ? setSelectedScorers : setSelectedTracks}
+                descriptions={mode === 'scores' ? SCORER_EXPLANATIONS : TRACK_EXPLANATIONS}
+                {...(mode === 'tracks' && { emptyMessage: 'No tracks available.' })}
+              />
+              {mode === 'scores' && !isHuman && (
+                <p className="text-xs text-muted-foreground">
+                  Polyadenylation scoring is human-only and hidden for Mouse.
+                </p>
+              )}
+            </div>
 
-                {isHuman && (
-                  <div className="grid gap-2">
-                    <div className="flex items-center gap-2">
-                      <Label htmlFor="hpo">HPO terms (optional)</Label>
-                      <InfoTooltip
-                        content={
-                          <>
-                            Selecting HPO terms doesn't filter results — it
-                            only re-sorts them, prioritizing genes linked to
-                            your selected phenotypes first. Hover (or focus)
-                            a term for its definition.
-                          </>
-                        }
-                      />
-                    </div>
-                    <MultiSelect
-                      id="hpo"
-                      options={hpoOptions}
-                      selected={selectedHpoTerms}
-                      onChange={setSelectedHpoTerms}
-                      placeholder="Search HPO terms…"
-                      disabled={hpoOptions.length === 0}
-                      descriptions={hpoDescriptions}
-                    />
-                  </div>
+            {mode === 'scores' && isHuman && (
+              <div className="grid gap-2">
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="hpo">HPO terms (optional)</Label>
+                  <InfoTooltip
+                    content={
+                      <>
+                        Selecting HPO terms doesn't filter results; it only
+                        re-sorts them, prioritizing genes linked to your
+                        selected phenotypes first. Hover (or focus) a term
+                        for its definition.
+                      </>
+                    }
+                  />
+                </div>
+                <MultiSelect
+                  id="hpo"
+                  options={hpoOptions}
+                  selected={selectedHpoTerms}
+                  onChange={setSelectedHpoTerms}
+                  placeholder="Search HPO terms…"
+                  disabled={hpoOptions.length === 0}
+                  descriptions={hpoDescriptions}
+                />
+              </div>
+            )}
+
+            {mode === 'tracks' && (
+              <div className="grid gap-2">
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="tissues">Tissues (max. 10)</Label>
+                  <InfoTooltip
+                    content={
+                      <>
+                        Each option's prefix names its ontology: UBERON
+                        (anatomical structure), CL (cell type), CLO (cell
+                        line), EFO (assay/experimental context), NTR
+                        (not-yet-formalized term). The 10-tissue cap is a UI
+                        choice, not an AlphaGenome limit.
+                      </>
+                    }
+                  />
+                </div>
+                <MultiSelect
+                  id="tissues"
+                  options={tissueOptions}
+                  selected={selectedTissues}
+                  onChange={setSelectedTissues}
+                  placeholder="Search & select tissues…"
+                  maxSelected={10}
+                  disabled={tissueOptions.length === 0}
+                />
+                {ontologyQuery.isError && (
+                  <p className="text-xs text-destructive">
+                    {(ontologyQuery.error as Error).message}
+                  </p>
                 )}
-              </>
-            ) : (
-              <>
-                <div className="grid gap-2">
-                  <div className="flex items-center gap-2">
-                    <Label htmlFor="tissues">Tissues (max. 10)</Label>
-                    <InfoTooltip
-                      content={
-                        <>
-                          Each option's prefix names its ontology: UBERON
-                          (anatomical structure), CL (cell type), CLO (cell
-                          line), EFO (assay/experimental context), NTR
-                          (not-yet-formalized term). The 10-tissue cap is a
-                          UI choice, not an AlphaGenome limit.
-                        </>
-                      }
-                    />
-                  </div>
-                  <MultiSelect
-                    id="tissues"
-                    options={tissueOptions}
-                    selected={selectedTissues}
-                    onChange={setSelectedTissues}
-                    placeholder="Search & select tissues…"
-                    maxSelected={10}
-                    disabled={tissueOptions.length === 0}
-                  />
-                  {ontologyQuery.isError && (
-                    <p className="text-xs text-destructive">
-                      {(ontologyQuery.error as Error).message}
-                    </p>
-                  )}
-                </div>
-
-                <div className="grid gap-2">
-                  <Label>Tracks</Label>
-                  <CheckList
-                    options={visualizationTracks}
-                    selected={selectedTracks}
-                    onChange={setSelectedTracks}
-                    emptyMessage="No tracks available."
-                    descriptions={TRACK_EXPLANATIONS}
-                  />
-                </div>
-              </>
+              </div>
             )}
           </div>
 

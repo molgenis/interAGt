@@ -126,7 +126,7 @@ export function MultiSelect({
             </CommandList>
             {visible.total > MAX_VISIBLE && (
               <p className="border-t px-3 py-2 text-xs text-muted-foreground">
-                Showing {MAX_VISIBLE} of {visible.total} — refine your search.
+                Showing {MAX_VISIBLE} of {visible.total}; refine your search.
               </p>
             )}
           </Command>

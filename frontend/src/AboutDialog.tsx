@@ -60,7 +60,7 @@ export function AboutDialog() {
               Human predictions use <strong className="text-foreground">hg38</strong>{' '}
               (GRCh38.p13); mouse predictions use{' '}
               <strong className="text-foreground">mm10</strong> (GRCm38.p6). No
-              other species are supported — AlphaGenome's own documentation
+              other species are supported. AlphaGenome's own documentation
               notes that prediction quality degrades with evolutionary
               distance from these two builds.
             </p>
@@ -77,7 +77,7 @@ export function AboutDialog() {
             <h3 className="font-medium">Model caveats</h3>
             <ul className="mt-1 list-disc space-y-1 pl-4 text-muted-foreground">
               <li>
-                Trained on unphased sequence — it does not model interactions
+                Trained on unphased sequence, so it does not model interactions
                 between two different alleles on a pair of chromosomes
                 (compound heterozygous effects).
               </li>
@@ -87,7 +87,7 @@ export function AboutDialog() {
                 the model.
               </li>
               <li>
-                Not benchmarked on personal or whole genomes — it's designed
+                Not benchmarked on personal or whole genomes; it's designed
                 for single-variant, single-interval predictions, not
                 complex-trait or polygenic interpretation.
               </li>

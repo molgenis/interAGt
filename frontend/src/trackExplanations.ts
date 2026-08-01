@@ -24,7 +24,7 @@ export const TRACK_EXPLANATIONS: TrackExplanations = {
   SPLICE_JUNCTIONS:
     'Measures splicing between exons. High scores indicate strong exon-exon junctions. Variants may disrupt junctions, leading to mis-splicing or novel isoforms.',
   CONTACT_MAPS:
-    'Differential contact maps (ALT vs REF) highlight predicted changes in chromatin interactions caused by the variant. Positive values indicate increased contact strength in the alternate allele, while negative values indicate decreased contact strength. Ignores your tissue selection — it always queries all available cell-line-scoped contexts, since contact-map ontology does not overlap the tissue ontology used elsewhere.',
+    'Differential contact maps (ALT vs REF) highlight predicted changes in chromatin interactions caused by the variant. Positive values indicate increased contact strength in the alternate allele, while negative values indicate decreased contact strength. Ignores your tissue selection: it always queries all available cell-line-scoped contexts, since contact-map ontology does not overlap the tissue ontology used elsewhere.',
 }
 
 // UI scorer name -> one-liner, shown as an Info tooltip in the Variant
@@ -44,9 +44,9 @@ export const SCORER_EXPLANATIONS: TrackExplanations = {
   CHIP_TF:
     'Center-mask scorer: local transcription-factor-binding signal log2 fold-change in a 501bp window centered on the variant. Signed.',
   Polyadenylation:
-    "paQTL scorer: max log2 fold-change between proximal vs distal poly-A site usage — captures alternative polyadenylation / 3'UTR shortening. Signed. Human only.",
+    "paQTL scorer: max log2 fold-change between proximal vs distal poly-A site usage, capturing alternative polyadenylation / 3'UTR shortening. Signed. Human only.",
   CONTACT_MAPS:
-    'Contact-map scorer: mean absolute change in 3D DNA-DNA contact frequency in a 1Mb window around the variant. Unsigned (magnitude only) — bars always render as "positive" colored even though that does not mean "increased".',
+    'Contact-map scorer: mean absolute change in 3D DNA-DNA contact frequency in a 1Mb window around the variant. Unsigned (magnitude only); bars always render as "positive" colored even though that does not mean "increased".',
 }
 
 // Scores-table column header -> one-liner, shown as an Info tooltip on
@@ -56,11 +56,11 @@ export const COLUMN_EXPLANATIONS: TrackExplanations = {
   gene_name: 'Gene symbol this score is attributed to.',
   gene_id: 'Ensembl gene ID this score is attributed to.',
   biosample_name: 'Tissue or cell type the underlying track was measured in.',
-  transcription_factor: 'Transcription factor being profiled — populated for CHIP_TF rows only.',
+  transcription_factor: 'Transcription factor being profiled, populated for CHIP_TF rows only.',
   raw_score:
-    "The scorer's native output (log2 fold-change, mean, or L2 norm, depending on the scorer). Units differ per scorer — not comparable across track types.",
+    "The scorer's native output (log2 fold-change, mean, or L2 norm, depending on the scorer). Units differ per scorer, not comparable across track types.",
   quantile_score:
     "raw_score's percentile rank against a genome-wide background of common human variants, computed per scorer and per track. Signed scorers map to [-1, 1] (0 = no change); unsigned scorers map to [0, 1]. Comparable across tracks, unlike raw_score.",
   hpo_gene_relevance:
-    "App-computed, not from AlphaGenome: 1 if this row's gene is linked to one of your selected HPO terms. Used only to re-sort results (HPO-relevant rows first) — it does not filter them.",
+    "App-computed, not from AlphaGenome: 1 if this row's gene is linked to one of your selected HPO terms. Used only to re-sort results (HPO-relevant rows first); it does not filter them.",
 }
