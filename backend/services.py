@@ -51,7 +51,7 @@ SCORER_SELECTION_CHOICES = [
 ]
 
 DEFAULT_TRACK_SELECTION = ["RNA_SEQ", "CHIP_TF", "ATAC"]
-EXCLUDED_VISUALIZATION_TRACKS = ["SPLICE_SITES", "SPLICE_SITE_USAGE"]
+EXCLUDED_VISUALIZATION_TRACKS: list[str] = []
 
 
 # ---------------------------------------------------------------------------
@@ -379,8 +379,6 @@ def dataframe_to_rows(df_scores: pd.DataFrame) -> list[dict[str, Any]]:
 
 _CONTINUOUS_EXCLUDED = {
     "SPLICE_JUNCTIONS",
-    "SPLICE_SITES",
-    "SPLICE_SITE_USAGE",
     "CONTACT_MAPS",
 }
 
