@@ -47,6 +47,12 @@ export const SCORER_EXPLANATIONS: TrackExplanations = {
     "paQTL scorer: max log2 fold-change between proximal vs distal poly-A site usage, capturing alternative polyadenylation / 3'UTR shortening. Signed. Human only.",
   CONTACT_MAPS:
     'Contact-map scorer: mean absolute change in 3D DNA-DNA contact frequency in a 1Mb window around the variant. Unsigned (magnitude only); bars always render as "positive" colored even though that does not mean "increased".',
+  SPLICE_SITES:
+    'Gene-mask scorer: change in splice-donor/acceptor class-assignment probability (ALT vs REF), summed across the gene. Unsigned (magnitude only).',
+  SPLICE_SITE_USAGE:
+    'Gene-mask scorer: change in splice-site usage fraction (ALT vs REF), summed across the gene. Unsigned (magnitude only).',
+  SPLICE_JUNCTIONS:
+    'Splice-junction scorer: change in predicted exon-exon junction usage (ALT vs REF). Unsigned (magnitude only).',
 }
 
 // Scores-table column header -> one-liner, shown as an Info tooltip on

@@ -46,8 +46,11 @@ SCORER_SELECTION_CHOICES = [
     "DNASE",
     "CHIP_HISTONE",
     "CHIP_TF",
-    "Polyadenylation",
     "CONTACT_MAPS",
+    "SPLICE_SITES",
+    "SPLICE_SITE_USAGE",
+    "SPLICE_JUNCTIONS",
+    "Polyadenylation",
 ]
 
 DEFAULT_TRACK_SELECTION = ["RNA_SEQ", "CHIP_TF", "ATAC"]
@@ -172,7 +175,10 @@ def load_tracks(api_key: str, organism: Any) -> dict[str, tuple[Any, str]]:
         attr_name = clean_name.lower()
         track_map[clean_name] = (output_type, attr_name)
 
-    return track_map
+    order = {name: index for index, name in enumerate(SCORER_SELECTION_CHOICES)}
+    return dict(
+        sorted(track_map.items(), key=lambda item: order.get(item[0], len(order)))
+    )
 
 
 # ---------------------------------------------------------------------------
