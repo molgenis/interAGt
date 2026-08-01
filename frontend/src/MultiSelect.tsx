@@ -26,6 +26,8 @@ interface MultiSelectProps {
   maxSelected?: number
   disabled?: boolean
   id?: string
+  /** Optional hover text per option (e.g. an HPO term's definition). */
+  descriptions?: Record<string, string>
 }
 
 export function MultiSelect({
@@ -37,6 +39,7 @@ export function MultiSelect({
   maxSelected,
   disabled = false,
   id,
+  descriptions,
 }: MultiSelectProps) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -107,6 +110,7 @@ export function MultiSelect({
                       value={option}
                       disabled={!isSelected && atLimit}
                       onSelect={() => toggle(option)}
+                      title={descriptions?.[option]}
                     >
                       <Check
                         className={cn(

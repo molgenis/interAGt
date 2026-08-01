@@ -12,8 +12,13 @@ export interface OrganismsResponse {
   organisms: OrganismItem[]
 }
 
+export interface HpoTermItem {
+  term: string
+  definition: string
+}
+
 export interface HpoTermsResponse {
-  terms: string[]
+  terms: HpoTermItem[]
 }
 
 export interface OntologyTermsResponse {

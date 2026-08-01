@@ -118,8 +118,12 @@ def get_hpo_lookup() -> dict[str, Any]:
         return json.load(handle)
 
 
-def get_hpo_terms() -> list[str]:
-    return sorted(get_hpo_lookup().keys())
+def get_hpo_terms() -> list[dict[str, str]]:
+    lookup = get_hpo_lookup()
+    return [
+        {"term": term, "definition": lookup.get(term, {}).get("definition") or ""}
+        for term in sorted(lookup.keys())
+    ]
 
 
 def get_available_scorers(organism_label: str) -> list[str]:

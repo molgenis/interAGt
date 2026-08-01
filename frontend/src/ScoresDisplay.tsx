@@ -1,7 +1,8 @@
 import { useMemo } from 'react'
 import { Plot, PLOTLY_CONFIG, plotTheme, themedAxis, themedLayout, themedHoverLabel } from '@/plotly'
 import type { ScoreRow } from '@/api'
-import type { TrackExplanations } from '@/trackExplanations'
+import { COLUMN_EXPLANATIONS, type TrackExplanations } from '@/trackExplanations'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/ui/tooltip'
 
 // ── ScoresTable ──────────────────────────────────────────────────────────────
 
@@ -42,7 +43,23 @@ export function ScoresTable({ rows }: { rows: ScoreRow[] }) {
                 key={col}
                 className="h-10 whitespace-nowrap px-3 text-left align-middle text-xs font-semibold uppercase tracking-wide text-muted-foreground"
               >
-                {col}
+                {COLUMN_EXPLANATIONS[col] ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        className="cursor-help border-0 border-b border-dotted border-muted-foreground/60 bg-transparent p-0 text-inherit focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        {col}
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent className="w-64 rounded border bg-popover p-2 text-xs normal-case tracking-normal text-popover-foreground">
+                      {COLUMN_EXPLANATIONS[col]}
+                    </TooltipContent>
+                  </Tooltip>
+                ) : (
+                  col
+                )}
               </th>
             ))}
           </tr>

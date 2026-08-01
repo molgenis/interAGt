@@ -32,8 +32,13 @@ class OrganismsResponse(BaseModel):
     organisms: list[OrganismItem]
 
 
+class HpoTermItem(BaseModel):
+    term: str
+    definition: str = ""
+
+
 class HpoTermsResponse(BaseModel):
-    terms: list[str]
+    terms: list[HpoTermItem]
 
 
 class OntologyTermsRequest(BaseModel):

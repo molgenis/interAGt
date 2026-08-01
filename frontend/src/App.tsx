@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { BarChart3, Info, KeyRound, LineChart, Loader2 } from 'lucide-react'
+import { BarChart3, KeyRound, LineChart, Loader2 } from 'lucide-react'
 import {
   useOrganisms,
   useHpoTerms,
@@ -9,8 +9,10 @@ import {
   useVariantScores,
   useTrackPlot,
 } from '@/api'
-import { TRACK_EXPLANATIONS } from '@/trackExplanations'
+import { TRACK_EXPLANATIONS, SCORER_EXPLANATIONS } from '@/trackExplanations'
 import { ApiKeyDialog } from '@/ApiKeyDialog'
+import { AboutDialog } from '@/AboutDialog'
+import { InfoTooltip } from '@/InfoTooltip'
 import { MultiSelect } from '@/MultiSelect'
 import { SeqLengthSelect, type SequenceLength } from '@/SeqLengthSelect'
 import { ScoresTable, ScoresSummaryCharts } from '@/ScoresDisplay'
@@ -27,7 +29,6 @@ import {
   SelectValue,
 } from '@/ui/select'
 import { Separator } from '@/ui/separator'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/ui/tooltip'
 import { Tabs, TabsList, TabsTrigger } from '@/ui/tabs'
 import { Input } from '@/ui/input'
 import { CheckList } from '@/CheckList'
@@ -152,7 +153,11 @@ export default function App() {
     (t) => !excludedTracks.includes(t),
   )
   const tissueOptions = ontologyQuery.data?.display_options ?? []
-  const hpoOptions = hpoTermsQuery.data?.terms ?? []
+  const hpoTerms = hpoTermsQuery.data?.terms ?? []
+  const hpoOptions = hpoTerms.map((t) => t.term)
+  const hpoDescriptions = Object.fromEntries(
+    hpoTerms.map((t) => [t.term, t.definition || 'No definition available.']),
+  )
 
   const canScore =
     Boolean(apiKey) &&
@@ -225,6 +230,7 @@ export default function App() {
           An intuitive interface to AlphaGenome
         </span>
         <div className="ml-auto flex items-center gap-1">
+          <AboutDialog />
           <ThemeToggle theme={theme} setTheme={setTheme} />
           <ApiKeyDialog apiKey={apiKey} onSave={saveApiKey} />
         </div>
@@ -242,7 +248,19 @@ export default function App() {
 
           <div className="mt-4 grid gap-4">
             <div className="grid gap-2">
-              <Label htmlFor="organism">Organism</Label>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="organism">Organism</Label>
+                <InfoTooltip
+                  content={
+                    <>
+                      Human predictions use the hg38 (GRCh38.p13) genome
+                      build; mouse predictions use mm10 (GRCm38.p6). No other
+                      species are supported. AlphaGenome is licensed for
+                      non-commercial use only — see About.
+                    </>
+                  }
+                />
+              </div>
               <Tabs value={organismValue} onValueChange={setOrganismValue}>
                 <TabsList id="organism" className="grid w-full grid-cols-2">
                   {organisms.map((o) => (
@@ -257,17 +275,20 @@ export default function App() {
             <div className="grid gap-2">
               <div className="flex items-center gap-2">
                 <Label htmlFor="variant">Variant</Label>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Info className="h-4 w-4 text-muted-foreground" />
-                  </TooltipTrigger>
-                  <TooltipContent className="w-64 rounded border bg-popover p-2 text-xs text-popover-foreground">
-                    Variant notation<br/>
-                    chrom:pos:ref:alt (human/mouse)<br/>
-                    Human only: HGVS or rsID<br/>
-                    Examples: chr1:12345:A:T, NM_001234.5:c.123A&gt;T, rs12345
-                  </TooltipContent>
-                </Tooltip>
+                <InfoTooltip
+                  content={
+                    <>
+                      Variant notation
+                      <br />
+                      chrom:pos:ref:alt (human/mouse)
+                      <br />
+                      Human only: HGVS or rsID
+                      <br />
+                      Examples: chr1:12345:A:T, NM_001234.5:c.123A&gt;T,
+                      rs12345
+                    </>
+                  }
+                />
               </div>
               <Input
                 id="variant"
@@ -320,7 +341,19 @@ export default function App() {
             )}
 
             <div className="grid gap-2">
-              <Label htmlFor="seq-length">Sequence window</Label>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="seq-length">Sequence window</Label>
+                <InfoTooltip
+                  content={
+                    <>
+                      Length of genomic sequence, centered on the variant,
+                      given to the model as input. Longer windows capture
+                      more distal regulatory context. AlphaGenome recommends
+                      the full 1 Mb window for the best accuracy.
+                    </>
+                  }
+                />
+              </div>
               <SeqLengthSelect
                 id="seq-length"
                 value={sequenceLength}
@@ -347,12 +380,31 @@ export default function App() {
                     options={availableScorers}
                     selected={selectedScorers}
                     onChange={setSelectedScorers}
+                    descriptions={SCORER_EXPLANATIONS}
                   />
+                  {!isHuman && (
+                    <p className="text-xs text-muted-foreground">
+                      Polyadenylation scoring is human-only and hidden for
+                      Mouse.
+                    </p>
+                  )}
                 </div>
 
                 {isHuman && (
                   <div className="grid gap-2">
-                    <Label htmlFor="hpo">HPO terms (optional)</Label>
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor="hpo">HPO terms (optional)</Label>
+                      <InfoTooltip
+                        content={
+                          <>
+                            Selecting HPO terms doesn't filter results — it
+                            only re-sorts them, prioritizing genes linked to
+                            your selected phenotypes first. Hover (or focus)
+                            a term for its definition.
+                          </>
+                        }
+                      />
+                    </div>
                     <MultiSelect
                       id="hpo"
                       options={hpoOptions}
@@ -360,6 +412,7 @@ export default function App() {
                       onChange={setSelectedHpoTerms}
                       placeholder="Search HPO terms…"
                       disabled={hpoOptions.length === 0}
+                      descriptions={hpoDescriptions}
                     />
                   </div>
                 )}
@@ -367,7 +420,20 @@ export default function App() {
             ) : (
               <>
                 <div className="grid gap-2">
-                  <Label htmlFor="tissues">Tissues (max. 10)</Label>
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="tissues">Tissues (max. 10)</Label>
+                    <InfoTooltip
+                      content={
+                        <>
+                          Each option's prefix names its ontology: UBERON
+                          (anatomical structure), CL (cell type), CLO (cell
+                          line), EFO (assay/experimental context), NTR
+                          (not-yet-formalized term). The 10-tissue cap is a
+                          UI choice, not an AlphaGenome limit.
+                        </>
+                      }
+                    />
+                  </div>
                   <MultiSelect
                     id="tissues"
                     options={tissueOptions}
@@ -391,6 +457,7 @@ export default function App() {
                     selected={selectedTracks}
                     onChange={setSelectedTracks}
                     emptyMessage="No tracks available."
+                    descriptions={TRACK_EXPLANATIONS}
                   />
                 </div>
               </>
