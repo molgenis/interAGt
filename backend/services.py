@@ -612,7 +612,7 @@ def predict_and_build_track_payload(
                 interval=interval,
                 variant=variant_obj,
                 organism=organism,
-                ontology_terms=None,
+                ontology_terms=ontology_terms, #changed from None, user needs to know what terms have contact maps.
                 requested_outputs=[track_map[track][0] for track in contact_tracks],
             )
             if outputs is None:
