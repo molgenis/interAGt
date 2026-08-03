@@ -495,14 +495,16 @@ export default function App() {
                         {trackExplanations.scores}
                       </p>
                     )}
-                    <ScoresTable rows={scoreData.rows} />
-                  </div>
-                  <div className="p-3">
+                    <div className="pb-3">
                     <Button
-                      onClick={() => downloadAsCSV(scoreData.rows, "ag_variant_scores")}
+                        variant="outline"
+                        size="sm"
+                        onClick={() => downloadAsCSV(scoreData.rows, "ag_variant_scores")}
                     >
-                      Download results as CSV
+                      Download results (CSV)
                     </Button>
+                  </div>
+                    <ScoresTable rows={scoreData.rows} />
                   </div>
                   
                 </details>
