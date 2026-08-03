@@ -24,7 +24,7 @@ export const TRACK_EXPLANATIONS: TrackExplanations = {
   SPLICE_JUNCTIONS:
     'Measures splicing between exons. High scores indicate strong exon-exon junctions. Variants may disrupt junctions, leading to mis-splicing or novel isoforms.',
   CONTACT_MAPS:
-    'Differential contact maps (ALT vs REF) highlight predicted changes in chromatin interactions caused by the variant. Positive values indicate increased contact strength in the alternate allele, while negative values indicate decreased contact strength. Ignores your tissue selection: it always queries all available cell-line-scoped contexts, since contact-map ontology does not overlap the tissue ontology used elsewhere.',
+    'Differential contact maps (ALT vs REF) highlight predicted changes in chromatin interactions caused by the variant. Positive values indicate increased contact strength in the alternate allele, while negative values indicate decreased contact strength.',
 }
 
 // UI scorer name -> one-liner, shown as an Info tooltip in the Variant
