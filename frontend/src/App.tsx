@@ -39,6 +39,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/ui/dialog'
+import { downloadAsCSV } from '@/DownloadScores'
 
 const DEFAULT_ORGANISM_VALUE = 'HOMO_SAPIENS'
 const FALLBACK_ORGANISM_LABEL = 'Human (hg38)'
@@ -496,6 +497,14 @@ export default function App() {
                     )}
                     <ScoresTable rows={scoreData.rows} />
                   </div>
+                  <div className="p-3">
+                    <Button
+                      onClick={() => downloadAsCSV(scoreData.rows, "ag_variant_scores")}
+                    >
+                      Download results as CSV
+                    </Button>
+                  </div>
+                  
                 </details>
 
                 <ScoresSummaryCharts
