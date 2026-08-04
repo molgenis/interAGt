@@ -192,6 +192,23 @@ function buildContactMapTrace(spec: ContactMapTrack, row: number): unknown {
   }
 }
 
+// --- Domains for controlling subplot height 
+function makeDomains(weights: number[]) {
+  const total = weights.reduce((a, b) => a + b, 0)
+  const gap = 0.02
+
+  let top = 1
+
+  return weights.map((w) => {
+    const h = (w / total) * (1 - gap * (weights.length - 1))
+    const domain: [number, number] = [top - h, top]
+
+    top = top - h - gap
+
+    return domain
+  })
+}
+
 // --- Axis configuration helpers ---
 
 function makeXAxis(
@@ -234,6 +251,8 @@ function makeYAxis(
   return cfg
 }
 
+
+
 // --- Main entry point ---
 
 export function buildTrackFigure(
@@ -247,7 +266,7 @@ export function buildTrackFigure(
   const transcriptRow = nSubplots
 
   const rowHeights = tracks.map((t) =>
-    t.type === 'contact_map' ? 8 : t.type === 'sashimi' ? 2 : 1,
+    t.type === 'contact_map' ? 6 : t.type === 'sashimi' ? 2 : 1,
   )
   rowHeights.push(2)
 
@@ -307,15 +326,10 @@ export function buildTrackFigure(
     annotations,
     hoverlabel: themedHoverLabel(theme),
     margin: { l: 60, r: 30, t: 40, b: 60 },
-    grid: {
-      rows: nSubplots,
-      columns: 1,
-      pattern: 'independent',
-      roworder: 'top to bottom',
-    },
-    row_heights: rowHeights,
-    vertical_spacing: 5 / ( 500 + 120 * totalHeight),
+  
   })
+
+  const domains = makeDomains(rowHeights)
 
   for (let row = 1; row <= nSubplots; row++) {
     layout[xKey(row)] = makeXAxis(
@@ -327,7 +341,10 @@ export function buildTrackFigure(
     )
 
     if (row <= tracks.length) {
-      layout[yKey(row)] = makeYAxis(row, theme, tracks[row - 1])
+      layout[yKey(row)] = {
+        ...makeYAxis(row, theme, tracks[row - 1]),
+        domain: domains[row - 1],
+      }
     } else if (row === transcriptRow && transcripts?.length) {
       layout[yKey(row)] = {
         ...themedAxis(theme),
@@ -336,9 +353,13 @@ export function buildTrackFigure(
         showticklabels: false,
         title: { text: '' },
         range: [-nLanes * TRACK_SPACING, CDS_HEIGHT + 0.8],
+        domain: domains[row - 1],
       }
     } else {
-      layout[yKey(row)] = makeYAxis(row, theme)
+      layout[yKey(row)] = {
+        ...makeYAxis(row, theme),
+        domain: domains[row - 1],
+      }
     }
   }
 
