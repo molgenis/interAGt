@@ -1,5 +1,25 @@
 import type { ScoreRow } from '@/api'
 
+
+/**
+ Replace `:`, `/`, and other special chars with `_`.
+ Truncate ref/alt sequences longer than 4 chars to `{length}N`.
+ Example: `chr1:123456:A:AAAAAAAAAA` → `chr1_123456_A_10N` .
+ */
+export function sanitizeVariantForFilename(variantName: string): string {
+  
+  const parts = variantName.split(/[:/]/);
+
+  if (parts.length >= 4) {
+    const ref = parts[2].length > 4 ? `${parts[2].length}N` : parts[2];
+    const alt = parts[3].length > 4 ? `${parts[3].length}N` : parts[3];
+    parts[2] = ref;
+    parts[3] = alt;
+  }
+
+  return parts.join('_').replace(/[^a-zA-Z0-9_]/g, '_');
+}
+
 export function downloadAsCSV(data: ScoreRow[], filename: string) {
   if (data.length === 0) return;
 

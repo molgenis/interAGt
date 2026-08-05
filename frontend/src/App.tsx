@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { BarChart3, KeyRound, LineChart, Loader2 } from 'lucide-react'
+import { BarChart3, Download, KeyRound, LineChart, Loader2 } from 'lucide-react'
 import {
   useOrganisms,
   useHpoTerms,
@@ -39,7 +39,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/ui/dialog'
-import { downloadAsCSV } from '@/DownloadScores'
+import { downloadAsCSV, sanitizeVariantForFilename } from '@/DownloadScores'
 
 const DEFAULT_ORGANISM_VALUE = 'HOMO_SAPIENS'
 const FALLBACK_ORGANISM_LABEL = 'Human (hg38)'
@@ -499,8 +499,13 @@ export default function App() {
                     <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => downloadAsCSV(scoreData.rows, "ag_variant_scores")}
-                    >
+                        onClick={() => {
+                          const variantName = selectedAlternative || normalizedVariant;
+                          const sanitizedVariant = sanitizeVariantForFilename(variantName);
+                          downloadAsCSV(scoreData.rows, `${sanitizedVariant}_variant_scores`);
+                        }}
+                        >
+                      <Download className="size-4" />
                       Download results (CSV)
                     </Button>
                   </div>

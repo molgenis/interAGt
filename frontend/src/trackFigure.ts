@@ -248,6 +248,9 @@ function makeYAxis(
   if (spec.type === 'sashimi') {
     cfg.showticklabels = false
   }
+  if (spec.type === 'contact_map') {
+    cfg.autorange = 'reversed'
+  }
   return cfg
 }
 
