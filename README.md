@@ -1,8 +1,8 @@
 
 
-<div style="display: flex; justify-content: center;">
+<p align="center">
 <img src="resources/logo_interAGt.svg" alt="logo" width="60%" />
-</div>
+</p>
 
 ## **InterAGt: A user-friendly interface for analyzing genetic variant effects**
 ![](resources//interAGt.gif)
