@@ -2,7 +2,7 @@
 ![](resources/logo_interAGt.svg)
 
 # **InterAGt: A user-friendly interface for analyzing genetic variant effects**
-
+![](resources//interAGt.gif)
 ## **About**
 
 InterAGt provides an intuitive way to **visualize and interpret the functional impact of genetic variants** using [AlphaGenome](https://www.alphagenomedocs.com), Google DeepMind's state-of-the-art model for predicting regulatory effects from DNA sequences.
@@ -29,7 +29,18 @@ For more details, see the [AlphaGenome Documentation](https://www.alphagenomedoc
 
 ## **Setup & Installation**
 
-### **Option 1: Run Directly (Recommended for Development)**
+### **Option 1: Pre-built Binaries**
+The easiest way to get started is to use one of the pre-compiled executables. No Python, Bun, or additional dependencies are required.
+
+Pre-compiled binaries for Windows, macOS, and Linux are available at **[INSERT DOWNLOAD LOCATION HERE]**.
+
+After downloading:
+
+Extract the archive.
+Launch the executable and the program will open at: http://localhost:8000.
+
+
+### **Option 2: Run Directly (Recommended for Development)**
 
 **Prerequisites:**
 - Python 3.12+
@@ -57,7 +68,7 @@ cd frontend && bun run dev       # http://localhost:5173, hot reload
 
 ---
 
-### **Option 2: Install via PyInstaller (Standalone Executable)**
+### **Option 3: Install via PyInstaller (Standalone Executable)**
 
 **Prerequisites:**
 - Python 3.12+
@@ -77,15 +88,12 @@ The executable will be created as `dist\AGInterpret.exe`.
 
 ---
 
-### **Option 3: Pre-built Binaries**
-
-Pre-compiled binaries for Windows, macOS, and Linux are available at **[INSERT DOWNLOAD LOCATION HERE]**.
 
 ---
 
-### **Option 4: Manual Setup (Legacy)**
+### **Option 4: Manual Setup**
 
-For manual setup (not recommended):
+For manual setup:
 
 ```bash
 # Clone the repository
