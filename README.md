@@ -39,7 +39,7 @@ After downloading:
 Extract the archive.
 Launch the executable and the program will open at: http://localhost:8000.
 
-
+---
 ### **Option 2: Run Directly (Recommended for Development)**
 
 **Prerequisites:**
@@ -85,9 +85,6 @@ The executable will be created in the `dist/` directory.
 .\build_win.ps1
 ```
 The executable will be created as `dist\AGInterpret.exe`.
-
----
-
 
 ---
 
