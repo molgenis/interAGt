@@ -1,7 +1,10 @@
 
-![](resources/logo_interAGt.svg)
 
-# **InterAGt: A user-friendly interface for analyzing genetic variant effects**
+<div style="display: flex; justify-content: center;">
+<img src="resources/logo_interAGt.svg" alt="logo" width="60%" />
+</div>
+
+## **InterAGt: A user-friendly interface for analyzing genetic variant effects**
 ![](resources//interAGt.gif)
 ## **About**
 
