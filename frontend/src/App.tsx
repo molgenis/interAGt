@@ -239,12 +239,28 @@ export default function App() {
       <div className="flex min-h-0 flex-1">
         {/* Left panel: inputs */}
         <aside className="flex w-[22rem] shrink-0 flex-col overflow-y-auto border-r p-4">
-          <Tabs value={mode} onValueChange={(v) => setMode(v as Mode)}>
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="scores">Scores</TabsTrigger>
-              <TabsTrigger value="tracks">Tracks</TabsTrigger>
-            </TabsList>
-          </Tabs>
+          <div className="grid gap-2">
+            <div className="flex items-center gap-2">
+              <Label htmlFor="mode">Output type</Label>
+              <InfoTooltip
+                content={
+                  <>
+                    Scores give a single variant-effect score per gene or
+                    track. Tracks plot predicted genomic signal across the
+                    region as a curve. Switching swaps both the inputs below
+                    and the results panel; each mode keeps its own results
+                    until you rerun it.
+                  </>
+                }
+              />
+            </div>
+            <Tabs value={mode} onValueChange={(v) => setMode(v as Mode)}>
+              <TabsList id="mode" className="grid w-full grid-cols-2">
+                <TabsTrigger value="scores">Scores</TabsTrigger>
+                <TabsTrigger value="tracks">Tracks</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
 
           <div className="mt-4 grid gap-4">
             <div className="grid gap-2">
