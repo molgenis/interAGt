@@ -268,12 +268,9 @@ export function buildTrackFigure(
   const nSubplots = tracks.length + 1
   const transcriptRow = nSubplots
 
-  const rowHeights = tracks.map((t) =>
+  const rowHeights: number[] = tracks.map((t) =>
     t.type === 'contact_map' ? 6 : t.type === 'sashimi' ? 2 : 1,
   )
-  rowHeights.push(2)
-
-  const totalHeight = rowHeights.reduce((a, b) => a + b, 0)
   const xRange: [number, number] = [interval.start, interval.end]
 
   const data: unknown[] = []
@@ -312,6 +309,8 @@ export function buildTrackFigure(
     annotations.push(...tx.annotations)
     nLanes = tx.nLanes
   }
+  rowHeights[transcriptRow - 1] = Math.max(2, nLanes + 1)
+  const totalHeight = rowHeights.reduce((a, b) => a + b, 0)
 
   // Configure axes
   const layout: Record<string, unknown> = themedLayout(theme, {
@@ -335,13 +334,17 @@ export function buildTrackFigure(
   const domains = makeDomains(rowHeights)
 
   for (let row = 1; row <= nSubplots; row++) {
-    layout[xKey(row)] = makeXAxis(
+    const xAxis = makeXAxis(
       row,
       xRange,
       row === nSubplots,
       theme,
       row <= tracks.length ? tracks[row - 1] : undefined,
     )
+    if (row === transcriptRow && transcripts?.length) {
+      xAxis.title = { text: 'Transcripts', standoff: 10 }
+    }
+    layout[xKey(row)] = xAxis
 
     if (row <= tracks.length) {
       layout[yKey(row)] = {
