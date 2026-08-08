@@ -7,7 +7,7 @@ import type {
   TrackPlotResponse,
   TrackSpec,
 } from '@/api'
-import { buildTranscriptObjects, CDS_HEIGHT, TRACK_SPACING } from '@/transcriptFigure'
+import { buildTranscriptObjects, TRACK_SPACING, TRACK_PAD } from '@/transcriptFigure'
 import { plotTheme, themedAxis, themedLayout, themedHoverLabel, type PlotTheme } from '@/plotly'
 
 const REF_COLOR = '#999'
@@ -309,7 +309,7 @@ export function buildTrackFigure(
     annotations.push(...tx.annotations)
     nLanes = tx.nLanes
   }
-  rowHeights[transcriptRow - 1] = Math.max(2, nLanes + 1)
+  rowHeights[transcriptRow - 1] = Math.max(1, (nLanes - 1) * TRACK_SPACING + 2 * TRACK_PAD)
   const totalHeight = rowHeights.reduce((a, b) => a + b, 0)
 
   // Configure axes
@@ -358,7 +358,7 @@ export function buildTrackFigure(
         fixedrange: true,
         showticklabels: false,
         title: { text: '' },
-        range: [-nLanes * TRACK_SPACING, CDS_HEIGHT + 0.8],
+        range: [-(nLanes - 1) * TRACK_SPACING - TRACK_PAD, TRACK_PAD],
         domain: domains[row - 1],
       }
     } else {

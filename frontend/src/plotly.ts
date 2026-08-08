@@ -17,6 +17,8 @@ export interface PlotTheme {
   grid: string
   /** Opaque backing for annotation labels that sit on top of traces. */
   surface: string
+  /** Fixed-order categorical hues for identity encoding (e.g. per-lane legend colors). Never cycle/reorder. */
+  categorical: string[]
 }
 
 const LIGHT: PlotTheme = {
@@ -24,6 +26,7 @@ const LIGHT: PlotTheme = {
   muted: '#64748b',
   grid: 'rgba(100,116,139,0.2)',
   surface: '#ffffff',
+  categorical: ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948'],
 }
 
 const DARK: PlotTheme = {
@@ -31,6 +34,7 @@ const DARK: PlotTheme = {
   muted: '#94a3b8',
   grid: 'rgba(148,163,184,0.2)',
   surface: '#0b1220',
+  categorical: ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', '#9085e9', '#e66767'],
 }
 
 export function plotTheme(isDark: boolean): PlotTheme {
