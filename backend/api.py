@@ -116,13 +116,14 @@ def score(payload: ScoreRequest) -> dict:
         scorer_names=payload.scorers,
     )
 
-    sort_applied = ["raw_score"]
+    sort_column = services.default_sort_column(df_scores)
+    sort_applied = [sort_column]
     if payload.hpo_terms:
         hpo_lookup = services.get_hpo_lookup()
         df_scores = services.apply_hpo_relevance(
             df_scores, payload.hpo_terms, hpo_lookup
         )
-        sort_applied = ["hpo_gene_relevance", "raw_score"]
+        sort_applied = ["hpo_gene_relevance", sort_column]
 
     output_types = (
         df_scores["output_type"].unique().tolist()

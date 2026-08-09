@@ -66,7 +66,7 @@ export const COLUMN_EXPLANATIONS: TrackExplanations = {
   raw_score:
     "The scorer's native output (log2 fold-change, mean, or L2 norm, depending on the scorer). Units differ per scorer, not comparable across track types.",
   quantile_score:
-    "raw_score's percentile rank against a genome-wide background of common human variants, computed per scorer and per track. Signed scorers map to [-1, 1] (0 = no change); unsigned scorers map to [0, 1]. Comparable across tracks, unlike raw_score.",
+    "raw_score's percentile rank against a genome-wide background of common human variants, computed per scorer and per track. Signed scorers map to [-1, 1] (0 = no change); unsigned scorers map to [0, 1]. Comparable across tracks, unlike raw_score. Default sort key for results.",
   hpo_gene_relevance:
     "App-computed, not from AlphaGenome: 1 if this row's gene is linked to one of your selected HPO terms. Used only to re-sort results (HPO-relevant rows first); it does not filter them.",
 }

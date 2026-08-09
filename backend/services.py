@@ -362,11 +362,19 @@ def score_variant(
         if column in df_scores.columns
     ]
 
-    result_df = df_scores.sort_values("raw_score", key=abs, ascending=False)
+    sort_column = default_sort_column(df_scores)
+    result_df = df_scores.sort_values(sort_column, key=abs, ascending=False)
     if dropped_columns:
         result_df = result_df.drop(columns=dropped_columns)
 
     return result_df
+
+
+def default_sort_column(df_scores: pd.DataFrame) -> str:
+    # quantile_score is comparable across scorers/track types (percentile rank
+    # against a common background); raw_score is not, since its units differ
+    # per scorer. Only fall back to raw_score if no scorer produced quantiles.
+    return "quantile_score" if "quantile_score" in df_scores.columns else "raw_score"
 
 
 def apply_hpo_relevance(
@@ -390,8 +398,10 @@ def apply_hpo_relevance(
         ranked_scores["gene_name"].isin(relevant_genes).astype(int)
     )
 
+    sort_column = default_sort_column(ranked_scores)
     return ranked_scores.sort_values(
-        ["hpo_gene_relevance", "raw_score"],
+        ["hpo_gene_relevance", sort_column],
+        key=abs,
         ascending=[False, False],
     )
 
