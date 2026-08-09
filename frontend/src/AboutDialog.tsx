@@ -42,6 +42,18 @@ export function AboutDialog() {
 
         <div className="space-y-4 text-sm">
           <section>
+            <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-foreground">
+              <strong>For research use only.</strong> Per Google DeepMind's
+              official guidance, AlphaGenome's predictions "are intended only
+              for research use and haven't been designed or validated for
+              direct clinical purposes." Not for personal genome prediction,
+              diagnosis, or clinical decision-making.
+            </p>
+          </section>
+
+          <Separator />
+
+          <section>
             <h3 className="font-medium">Licensing</h3>
             <p className="mt-1 text-muted-foreground">
               AlphaGenome is available for{' '}
