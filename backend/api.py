@@ -61,7 +61,6 @@ def ontology_terms(payload: OntologyTermsRequest) -> dict:
 @metadata_router.post("/tracks", response_model=TracksResponse)
 def tracks(payload: TracksRequest) -> dict:
     track_map = services.load_tracks(payload.api_key, payload.organism)
-    organism_label = services.get_organism_label(payload.organism)
 
     default_selection = [
         track for track in services.DEFAULT_TRACK_SELECTION if track in track_map
@@ -71,7 +70,7 @@ def tracks(payload: TracksRequest) -> dict:
         "tracks": list(track_map.keys()),
         "default_selection": default_selection,
         "excluded_from_visualization": services.EXCLUDED_VISUALIZATION_TRACKS,
-        "available_scorers": services.get_available_scorers(organism_label),
+        "available_scorers": services.get_available_scorers(payload.organism, track_map.keys()),
     }
 
 

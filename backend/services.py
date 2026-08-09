@@ -130,11 +130,29 @@ def get_hpo_terms() -> list[dict[str, str]]:
     ]
 
 
-def get_available_scorers(organism_label: str) -> list[str]:
-    scorers = SCORER_SELECTION_CHOICES.copy()
-    if "mouse" in organism_label.lower():
-        scorers = [scorer for scorer in scorers if scorer.lower() != "polyadenylation"]
-    return scorers
+def get_available_scorers(organism: Any, available_tracks: Iterable[str]) -> list[str]:
+    resolved = resolve_organism(organism)
+    track_names = set(available_tracks)
+
+    available: list[str] = []
+    for name in SCORER_SELECTION_CHOICES:
+        scorer = variant_scorers.RECOMMENDED_VARIANT_SCORERS.get(name.upper())
+        if scorer is None:
+            continue
+
+        supported = variant_scorers.SUPPORTED_ORGANISMS.get(scorer.base_variant_scorer, ())
+        if resolved.value not in supported:
+            continue
+
+        requested_output = getattr(scorer, "requested_output", None)
+        if requested_output is not None:
+            output_type_name = str(requested_output).split(".")[-1]
+            if output_type_name not in track_names:
+                continue
+
+        available.append(name)
+
+    return available
 
 
 def _organism_cache_key(organism: Any) -> str:

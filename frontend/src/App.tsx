@@ -443,7 +443,29 @@ export default function App() {
             )}
 
             <div className="grid gap-2">
-              <Label>Tracks</Label>
+              <div className="flex items-center gap-2">
+                <Label>Tracks</Label>
+                <InfoTooltip
+                  content={
+                    mode === 'scores' ? (
+                      <>
+                        Variant-effect scorers to run. Available scorers
+                        depend on the selected organism; PROCAP and
+                        Polyadenylation aren't available for Mouse, since
+                        AlphaGenome doesn't provide that data for this
+                        organism.
+                      </>
+                    ) : (
+                      <>
+                        Genomic signal tracks to plot. Available tracks
+                        depend on the selected organism; Mouse has no PROCAP
+                        track, since AlphaGenome doesn't provide that data
+                        for this organism.
+                      </>
+                    )
+                  }
+                />
+              </div>
               <CheckList
                 options={mode === 'scores' ? availableScorers : visualizationTracks}
                 selected={mode === 'scores' ? selectedScorers : selectedTracks}
@@ -451,11 +473,6 @@ export default function App() {
                 descriptions={mode === 'scores' ? SCORER_EXPLANATIONS : TRACK_EXPLANATIONS}
                 {...(mode === 'tracks' && { emptyMessage: 'No tracks available.' })}
               />
-              {mode === 'scores' && !isHuman && (
-                <p className="text-xs text-muted-foreground">
-                  Polyadenylation scoring is human-only and hidden for Mouse.
-                </p>
-              )}
             </div>
 
             {mode === 'scores' && isHuman && (
