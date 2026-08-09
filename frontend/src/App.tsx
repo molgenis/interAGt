@@ -489,7 +489,9 @@ export default function App() {
                         Selecting HPO terms doesn't filter results; it only
                         re-sorts them, prioritizing genes linked to your
                         selected phenotypes first. Hover (or focus) a term
-                        for its definition.
+                        for its definition. Very broad terms may match nearly
+                        every gene in the window, making the re-sort
+                        meaningless.
                       </>
                     }
                   />
