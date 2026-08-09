@@ -36,7 +36,7 @@ ORGANISM_MAP = {
 
 ORGANISM_EXAMPLE_VARIANTS = {
     "Human (hg38)": "chr5:1295113:G:A",
-    "Mouse (mm10)": "chr13:73626861:A:G",
+    "Mouse (mm10)": "chr13:73626861:C:G",
 }
 
 SCORER_SELECTION_CHOICES = [

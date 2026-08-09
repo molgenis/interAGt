@@ -22,6 +22,15 @@ NC_ACCESSION_MAP = {
 }
 
 VV_BASE = "https://rest.variantvalidator.org/VariantValidator"
+ENSEMBL_BASE = "https://rest.ensembl.org"
+
+# organism_label -> (Ensembl species, Ensembl coord_system_version)
+# Pinned explicitly since Ensembl's *default* assembly for a species can move
+# on (e.g. mouse now defaults to GRCm39) while our UCSC-named builds don't.
+_SPECIES_BUILD = {
+    "Human (hg38)": ("homo_sapiens", "GRCh38"),
+    "Mouse (mm10)": ("mus_musculus", "GRCm38"),
+}
 
 # Warning noise we never surface to users.
 _NOISE_PREFIXES = ("Lovd",)
@@ -57,9 +66,8 @@ def resolve_variant(
 
     # ========== 1. Already correct format ==========
     if re.match(r'^[a-zA-Z0-9]+:\d+:[ACGT]+:[ACGT]+$', variant_str):
-        return VariantResolution(
-            normalized=_normalize_chromosome_in_variant(variant_str)
-        )
+        normalized = _normalize_chromosome_in_variant(variant_str)
+        return _check_reference_base(normalized, organism_label)
 
     if organism_label == "Human (hg38)":
         # ========== 2. HGVS genomic ==========
@@ -224,6 +232,67 @@ def _extract_confirmation(warnings: list[str]) -> Optional[VariantResolution]:
             actual_ref=actual_ref,
         )
     return None
+
+
+def _check_reference_base(normalized: str, organism_label: str) -> VariantResolution:
+    """Verify a chr:pos:ref:alt variant's ref base against the reference genome.
+
+    Mirrors the mismatch handling in `_extract_confirmation`: a mismatch never
+    blocks the variant, it just asks the user to confirm before proceeding.
+    """
+    chrom, pos, given_ref, alt = normalized.split(":")
+    actual_ref = _lookup_reference_bases(chrom, int(pos), len(given_ref), organism_label)
+
+    if actual_ref is None:
+        # Unsupported organism or the lookup failed (e.g. network issue) —
+        # don't block the user on an unreachable third-party service.
+        return VariantResolution(normalized=normalized)
+
+    if actual_ref.upper() == given_ref.upper():
+        return VariantResolution(normalized=normalized)
+
+    mapped_position = f"{chrom}:{pos}"
+    message = (
+        f"{mapped_position} has reference base {actual_ref} in the genome, "
+        f"but your variant specifies {given_ref}. Proceeding will use your "
+        f"input ({given_ref}>{alt})."
+    )
+    return VariantResolution(
+        normalized=normalized,
+        needs_confirmation=True,
+        message=message,
+        mapped_position=mapped_position,
+        given_ref=given_ref,
+        actual_ref=actual_ref,
+    )
+
+
+def _lookup_reference_bases(
+    chrom: str, pos: int, length: int, organism_label: str
+) -> Optional[str]:
+    """Fetch the reference genome's base(s) at chrom:pos via Ensembl, or None."""
+    species_build = _SPECIES_BUILD.get(organism_label)
+    if not species_build:
+        return None
+    species, build = species_build
+
+    region_name = chrom[3:] if chrom.startswith("chr") else chrom
+    if region_name == "M":
+        region_name = "MT"
+    region = f"{region_name}:{pos}-{pos + length - 1}:1"
+
+    try:
+        r = requests.get(
+            f"{ENSEMBL_BASE}/sequence/region/{species}/{region}",
+            params={"coord_system_version": build, "content-type": "text/plain"},
+            timeout=15,
+        )
+        r.raise_for_status()
+        bases = r.text.strip().upper()
+    except Exception:
+        return None
+
+    return bases or None
 
 
 def _translate_warnings(warnings: list[str], hgvs: str) -> str:
