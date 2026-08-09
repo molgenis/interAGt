@@ -5,7 +5,7 @@ import logging
 import logging.config
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 
 # ---------------------------------------------------------------------------
@@ -46,12 +46,14 @@ class AppError(Exception):
         message: str,
         code: Optional[str] = None,
         status_code: Optional[int] = None,
+        details: Optional[list[dict[str, Any]]] = None,
     ) -> None:
         super().__init__(message)
         if code is not None:
             self.code = code
         if status_code is not None:
             self.status_code = status_code
+        self.details = details
 
 
 class InvalidRequestError(AppError):
@@ -76,6 +78,18 @@ class UpstreamServiceError(AppError):
 
 class NoVariantResultsError(AppError):
     code = "no_variant_results"
+    status_code = 400
+
+
+class NoTrackDataError(AppError):
+    """Raised when none of the requested tracks yielded any plottable data.
+
+    Carries a `details` list of {track, reason_code, message} so the caller
+    can tell apart e.g. a track unsupported by the organism from a track x
+    tissue combination AlphaGenome simply never measured.
+    """
+
+    code = "no_track_data"
     status_code = 400
 
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { BarChart3, Download, KeyRound, LineChart, Loader2 } from 'lucide-react'
+import { BarChart3, Download, KeyRound, LineChart, Loader2, X } from 'lucide-react'
 import {
   useOrganisms,
   useHpoTerms,
@@ -8,6 +8,8 @@ import {
   useTracks,
   useVariantScores,
   useTrackPlot,
+  type ApiRequestError,
+  type TrackIssue,
 } from '@/api'
 import { TRACK_EXPLANATIONS, SCORER_EXPLANATIONS } from '@/trackExplanations'
 import { ApiKeyDialog } from '@/ApiKeyDialog'
@@ -54,7 +56,15 @@ function curieFromDisplay(display: string): string {
   return display.slice(open + 1, close)
 }
 
-function ErrorNote({ title, message }: { title: string; message: string }) {
+function ErrorNote({
+  title,
+  message,
+  details,
+}: {
+  title: string
+  message: string
+  details?: TrackIssue[]
+}) {
   return (
     <div
       role="alert"
@@ -62,6 +72,51 @@ function ErrorNote({ title, message }: { title: string; message: string }) {
     >
       <div className="font-medium">{title}</div>
       <div className="mt-0.5 text-xs">{message}</div>
+      {details && details.length > 0 && (
+        <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-xs">
+          {details.map((d, i) => (
+            <li key={`${d.track}-${i}`}>
+              <span className="font-medium">{d.track}:</span> {d.message}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+function WarningsNote({
+  warnings,
+  total,
+  onDismiss,
+}: {
+  warnings: TrackIssue[]
+  total: number
+  onDismiss: () => void
+}) {
+  return (
+    <div
+      role="alert"
+      className="relative rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 pr-8 text-sm text-amber-700 dark:text-amber-500"
+    >
+      <button
+        type="button"
+        onClick={onDismiss}
+        aria-label="Dismiss"
+        className="absolute right-2 top-2 rounded-sm opacity-70 hover:opacity-100"
+      >
+        <X className="size-4" />
+      </button>
+      <div className="font-medium">
+        {warnings.length} of {total} track{total === 1 ? '' : 's'} had no data
+      </div>
+      <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-xs">
+        {warnings.map((w, i) => (
+          <li key={`${w.track}-${i}`}>
+            <span className="font-medium">{w.track}:</span> {w.message}
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }
@@ -106,6 +161,7 @@ export default function App() {
   const [selectedTissues, setSelectedTissues] = useState<string[]>([])
   const [selectedTracks, setSelectedTracks] = useState<string[]>([])
   const [pendingAction, setPendingAction] = useState<Mode | null>(null)
+  const [warningsDismissed, setWarningsDismissed] = useState(false)
 
   const organismsQuery = useOrganisms()
   const organisms = organismsQuery.data?.organisms ?? []
@@ -140,6 +196,10 @@ export default function App() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tracksQuery.data])
+
+  useEffect(() => {
+    if (trackPlotMutation.data) setWarningsDismissed(false)
+  }, [trackPlotMutation.data])
 
   const normalization = normalizationQuery.data
   const alternatives = normalization?.alternatives ?? []
@@ -468,13 +528,6 @@ export default function App() {
                   )}
                   {scoreMutation.isPending ? 'Scoring…' : 'Get variant scores'}
                 </Button>
-
-                {scoreMutation.isError && (
-                  <ErrorNote
-                    title="Scoring failed"
-                    message={(scoreMutation.error as Error).message}
-                  />
-                )}
               </>
             ) : (
               <>
@@ -484,13 +537,6 @@ export default function App() {
                   )}
                   {trackPlotMutation.isPending ? 'Running model…' : 'Visualize'}
                 </Button>
-
-                {trackPlotMutation.isError && (
-                  <ErrorNote
-                    title="Visualization failed"
-                    message={(trackPlotMutation.error as Error).message}
-                  />
-                )}
               </>
             )}
           </div>
@@ -499,7 +545,12 @@ export default function App() {
         {/* Right panel: results */}
         <main className="min-w-0 flex-1 overflow-y-auto p-6">
           {mode === 'scores' ? (
-            scoreData && scoreData.rows.length > 0 ? (
+            scoreMutation.isError ? (
+              <ErrorNote
+                title="Scoring failed"
+                message={(scoreMutation.error as Error).message}
+              />
+            ) : scoreData && scoreData.rows.length > 0 ? (
               <div className="space-y-6">
                 <details className="rounded-lg border p-4">
                   <summary className="cursor-pointer text-sm font-medium">
@@ -554,13 +605,28 @@ export default function App() {
                 }
               />
             )
+          ) : trackPlotMutation.isError ? (
+            <ErrorNote
+              title="Visualization failed"
+              message={(trackPlotMutation.error as ApiRequestError).message}
+              details={(trackPlotMutation.error as ApiRequestError).details}
+            />
           ) : trackPayload ? (
-            <div className="rounded-lg border p-6 space-y-4">
-              <DownloadHtmlButton
-                fileName={`${normalizedVariant}_tracks.html`}
-                payload={trackPayload}
-              />
-              <TrackPlot payload={trackPayload} isDark={isDark} />
+            <div className="space-y-4">
+              {!warningsDismissed && trackPayload.warnings.length > 0 && (
+                <WarningsNote
+                  warnings={trackPayload.warnings}
+                  total={selectedTracks.length}
+                  onDismiss={() => setWarningsDismissed(true)}
+                />
+              )}
+              <div className="rounded-lg border p-6 space-y-4">
+                <DownloadHtmlButton
+                  fileName={`${normalizedVariant}_tracks.html`}
+                  payload={trackPayload}
+                />
+                <TrackPlot payload={trackPayload} isDark={isDark} />
+              </div>
             </div>
           ) : (
             <EmptyState

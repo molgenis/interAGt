@@ -18,6 +18,7 @@ from backend.core import (
     InvalidRequestError,
     InvalidVariantError,
     MissingApiKeyError,
+    NoTrackDataError,
     NoVariantResultsError,
     UpstreamServiceError,
 )
@@ -393,6 +394,11 @@ _CONTINUOUS_EXCLUDED = {
 }
 
 
+def _skip(track_name: str, reason_code: str, message: str) -> dict[str, str]:
+    """Build a structured skip diagnostic for a track that yielded no plottable data."""
+    return {"track": track_name, "reason_code": reason_code, "message": message}
+
+
 def _metadata_to_dict(metadata: Any) -> dict[str, Any]:
     """Convert a pandas Series (or None) of track metadata into a plain dict."""
     if metadata is None:
@@ -472,23 +478,59 @@ def build_track_payload(
     interval_length: int,
     interval: Any,
     transcript_extractor: Any,
+    skipped: list[dict[str, str]] | None = None,
 ) -> dict[str, Any]:
-    """Extract JSON-serializable data for frontend plotting."""
+    """Extract JSON-serializable data for frontend plotting.
+
+    `skipped` seeds the diagnostics list with skips already known to the
+    caller (e.g. tracks unavailable for the organism); this function appends
+    to it for every requested track that ends up with no plottable data.
+    """
     tracks_payload: list[dict[str, Any]] = []
+    skipped = list(skipped) if skipped else []
 
     for track_name in selected_tracks:
         track_info = track_map.get(track_name)
         if not track_info:
+            skipped.append(
+                _skip(track_name, "track_unavailable", f"{track_name} is not offered by this organism/model.")
+            )
             continue
         attr = track_info[1]
         ref_data = getattr(outputs.reference, attr, None)
         alt_data = getattr(outputs.alternate, attr, None)
         if ref_data is None or alt_data is None:
+            if track_name == "CONTACT_MAPS":
+                skipped.append(
+                    _skip(
+                        track_name,
+                        "contact_map_ontology_mismatch",
+                        "No contact map data was returned for the selected ontology term(s); "
+                        "contact maps use a separate cell-line ontology that may not overlap your tissue selection.",
+                    )
+                )
+            else:
+                skipped.append(
+                    _skip(
+                        track_name,
+                        "no_output_data",
+                        f"AlphaGenome returned no {track_name} data for this interval and sequence length.",
+                    )
+                )
             continue
 
         if track_name not in _CONTINUOUS_EXCLUDED:
             ref_values = ref_data.values
             alt_values = alt_data.values
+            if ref_values.shape[1] == 0:
+                skipped.append(
+                    _skip(
+                        track_name,
+                        "track_tissue_mismatch",
+                        f"No {track_name} data is available for the selected tissue(s).",
+                    )
+                )
+                continue
             ref_interval_start = int(ref_data.interval.start)
             for i in range(ref_values.shape[1]):
                 metadata = ref_data.metadata.iloc[i]
@@ -503,6 +545,16 @@ def build_track_payload(
                     }
                 )
         elif track_name == "SPLICE_JUNCTIONS":
+            if ref_data.values.shape[1] == 0:
+                skipped.append(
+                    _skip(
+                        track_name,
+                        "track_tissue_mismatch",
+                        f"No {track_name} data is available for the selected tissue(s).",
+                    )
+                )
+                continue
+
             ref_junctions = getattr(ref_data, "junctions", [])
             alt_junctions = getattr(alt_data, "junctions", [])
             ref_shape = getattr(ref_junctions, "shape", None)
@@ -510,6 +562,13 @@ def build_track_payload(
             has_ref = ref_shape is not None and ref_shape[0] > 0
             has_alt = alt_shape is not None and alt_shape[0] > 0
             if not has_ref and not has_alt:
+                skipped.append(
+                    _skip(
+                        track_name,
+                        "empty_splice_junctions",
+                        "No splice junctions were predicted in this variant's window.",
+                    )
+                )
                 continue
 
             ref_counts = list(getattr(ref_data, "values", []))
@@ -529,6 +588,16 @@ def build_track_payload(
         elif track_name == "CONTACT_MAPS":
             ref_values = ref_data.values
             alt_values = alt_data.values
+            if ref_values.shape[2] == 0:
+                skipped.append(
+                    _skip(
+                        track_name,
+                        "contact_map_ontology_mismatch",
+                        "No contact map data was returned for the selected ontology term(s); "
+                        "contact maps use a separate cell-line ontology that may not overlap your tissue selection.",
+                    )
+                )
+                continue
             for i in range(ref_values.shape[2]):
                 metadata = ref_data.metadata.iloc[i]
                 contact_diff = (alt_values[:, :, i] - ref_values[:, :, i]).astype(float)
@@ -549,7 +618,12 @@ def build_track_payload(
                 )
 
     if not tracks_payload:
-        raise InvalidRequestError("No valid tracks to plot.")
+        summary = (
+            skipped[0]["message"]
+            if len(skipped) == 1
+            else "No data was returned for any of the selected track(s)."
+        )
+        raise NoTrackDataError(summary, details=skipped)
 
     transcripts = (
         transcript_extractor.extract(interval) if transcript_extractor else []
@@ -570,6 +644,7 @@ def build_track_payload(
         },
         "tracks": tracks_payload,
         "transcripts": _extract_transcripts(transcripts),
+        "warnings": skipped,
     }
 
 
@@ -588,13 +663,35 @@ def predict_and_build_track_payload(
     if not selected_tracks:
         raise InvalidRequestError("Select at least one track.")
 
+    # A track selected under a different organism (e.g. stale frontend state
+    # after switching organism) won't exist in this organism's track_map.
+    # Drop those upfront rather than letting the KeyError below surface as an
+    # opaque failure once every requested track is invalid.
+    skipped: list[dict[str, str]] = []
+    available_tracks: list[str] = []
+    for track_name in selected_tracks:
+        if track_name in track_map:
+            available_tracks.append(track_name)
+        else:
+            skipped.append(
+                _skip(track_name, "track_unavailable", f"{track_name} is not offered by this organism/model.")
+            )
+
+    if not available_tracks:
+        summary = (
+            skipped[0]["message"]
+            if len(skipped) == 1
+            else "None of the selected tracks are available for this organism."
+        )
+        raise NoTrackDataError(summary, details=skipped)
+
     interval, variant_obj = parse_variant_interval(variant_str, sequence_length)
 
     # Contact maps use cell-line-scoped ontology (EFO) that does not overlap
     # the user-selected tissue ontology terms; filtering by ontology_terms
     # returns zero contact-map tracks. Request contact maps unfiltered.
-    contact_tracks = [t for t in selected_tracks if t == "CONTACT_MAPS"]
-    other_tracks = [t for t in selected_tracks if t != "CONTACT_MAPS"]
+    contact_tracks = [t for t in available_tracks if t == "CONTACT_MAPS"]
+    other_tracks = [t for t in available_tracks if t != "CONTACT_MAPS"]
 
     try:
         outputs = None
@@ -629,17 +726,16 @@ def predict_and_build_track_payload(
                         contact_maps=contact_outputs.alternate.contact_maps,
                     ),
                 )
-    except KeyError as exc:
-        raise InvalidRequestError(f"Unknown track selection: {exc}") from exc
     except Exception as exc:
         raise UpstreamServiceError("Could not generate track predictions.") from exc
 
     return build_track_payload(
         outputs=outputs,
         variant=variant_obj,
-        selected_tracks=selected_tracks,
+        selected_tracks=available_tracks,
         track_map=track_map,
         interval_length=sequence_length,
         interval=interval,
         transcript_extractor=transcript_extractor,
+        skipped=skipped,
     )

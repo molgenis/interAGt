@@ -130,18 +130,25 @@ export interface TrackVariantInfo {
   label: string
 }
 
+export interface TrackIssue {
+  track: string
+  reason_code: string
+  message: string
+}
+
 export interface TrackPlotResponse {
   interval: TrackIntervalInfo
   variant: TrackVariantInfo
   tracks: TrackSpec[]
   transcripts: TranscriptSpec[]
+  warnings: TrackIssue[]
 }
 
 interface ApiErrorBody {
   error: {
     code: string
     message: string
-    details?: unknown
+    details?: TrackIssue[]
   }
 }
 
@@ -153,10 +160,12 @@ const API_BASE_URL: string =
 
 export class ApiRequestError extends Error {
   code: string
-  constructor(message: string, code = 'error') {
+  details?: TrackIssue[]
+  constructor(message: string, code = 'error', details?: TrackIssue[]) {
     super(message)
     this.name = 'ApiRequestError'
     this.code = code
+    this.details = details
   }
 }
 
@@ -189,6 +198,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ApiRequestError(
       errorBody?.error?.message ?? `Request failed (${response.status})`,
       errorBody?.error?.code ?? 'error',
+      errorBody?.error?.details,
     )
   }
 
@@ -300,7 +310,7 @@ export function useVariantScores() {
 export function useTrackPlot() {
   return useMutation<
     TrackPlotResponse,
-    Error,
+    ApiRequestError,
     {
       api_key: string
       organism: string
