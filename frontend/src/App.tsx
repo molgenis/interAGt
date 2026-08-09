@@ -424,10 +424,12 @@ export default function App() {
                 <InfoTooltip
                   content={
                     <>
-                      Length of genomic sequence, centered on the variant,
-                      given to the model as input. Longer windows capture
-                      more distal regulatory context. AlphaGenome recommends
-                      the full 1 Mb window for the best accuracy.
+                      Length of genomic sequence, centered on the variant. AlphaGenome recommends
+                      the full 1 Mb window for the best accuracy. At longer
+                      windows, in case AlphaGenome returns some tracks at a coarser
+                      native resolution, the app
+                      linearly interpolates them to fill the plot, so
+                      the curve is smoothed, not per-base prediction.
                     </>
                   }
                 />
