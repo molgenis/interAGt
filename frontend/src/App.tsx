@@ -14,6 +14,7 @@ import {
 import { TRACK_EXPLANATIONS, SCORER_EXPLANATIONS } from '@/trackExplanations'
 import { ApiKeyDialog } from '@/ApiKeyDialog'
 import { AboutDialog } from '@/AboutDialog'
+import { FAQDialog } from '@/FAQDialog'
 import { InfoTooltip } from '@/InfoTooltip'
 import { MultiSelect } from '@/MultiSelect'
 import { SeqLengthSelect, type SequenceLength } from '@/SeqLengthSelect'
@@ -291,6 +292,7 @@ export default function App() {
         </span>
         <div className="ml-auto flex items-center gap-1">
           <AboutDialog />
+          <FAQDialog />
           <ThemeToggle theme={theme} setTheme={setTheme} />
           <ApiKeyDialog apiKey={apiKey} onSave={saveApiKey} />
         </div>
