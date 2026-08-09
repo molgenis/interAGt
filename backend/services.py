@@ -356,6 +356,12 @@ def score_variant(
     if df_scores is None or df_scores.empty:
         raise NoVariantResultsError("No variant results")
 
+    if "variant_scorer" in df_scores.columns:
+        is_polyadenylation = df_scores["variant_scorer"].str.startswith(
+            "PolyadenylationScorer"
+        )
+        df_scores.loc[is_polyadenylation, "output_type"] = "Polyadenylation"
+
     dropped_columns = [
         column
         for column in ["variant_id", "scored_interval"]

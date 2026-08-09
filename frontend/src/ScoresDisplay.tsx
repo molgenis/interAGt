@@ -210,7 +210,7 @@ export function ScoresSummaryCharts({
         if (filtered.length === 0) return null
 
         let chart
-        if (outputType === 'RNA_SEQ')
+        if (outputType === 'RNA_SEQ' || outputType === 'Polyadenylation')
           chart = <FacetGrid rows={filtered} field="gene_name" isDark={isDark} />
         else if (outputType === 'CHIP_TF')
           chart = (
