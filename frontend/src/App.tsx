@@ -280,7 +280,7 @@ export default function App() {
 
   const scoreData = scoreMutation.data
   const trackPayload = trackPlotMutation.data ?? null
-  const trackExplanations = TRACK_EXPLANATIONS
+  const trackExplanations = SCORER_EXPLANATIONS
 
   return (
     <div className="flex h-full flex-col">
