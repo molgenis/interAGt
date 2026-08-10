@@ -1,0 +1,94 @@
+name: Build macOS DMG
+
+# PyInstaller cannot cross-compile, so the macOS .app has to be built on a macOS
+# host of the target arch. This runs package_mac.sh (build_script.sh + hdiutil)
+# on both an Apple silicon and an Intel runner and uploads one DMG per arch.
+#
+# Runner labels: macos-latest (arm64) and macos-15-intel (x86_64). macos-13,
+# the old Intel label, was fully retired 2025-12-04; macos-15-intel is its
+# successor, supported through Fall 2027.
+# https://github.com/actions/runner-images/issues/13045
+#
+# Builds are unsigned and un-notarised — Gatekeeper will quarantine them on
+# first launch, same caveat the README already gives for local builds.
+on:
+  # workflow_dispatch only shows up in the Actions UI once this file is on the
+  # default branch; until then, the push trigger below is what fires.
+  workflow_dispatch:
+  push:
+    branches: ["**"]
+    # Deliberately narrow: this repo is private, so macOS minutes bill at 10x.
+    # Build only when the packaging inputs themselves change.
+    paths:
+      - ".github/workflows/build-macos.yml"
+      - "build_script.sh"
+      - "package_mac.sh"
+      - "app_launcher.py"
+  # Publishing a GitHub release attaches the DMG to it.
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false # Intel runner retirement/flakiness must not cancel arm64
+      matrix:
+        include:
+          - { runner: macos-latest, arch: arm64 }
+          - { runner: macos-15-intel, arch: x86_64 }
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: oven-sh/setup-bun@v2
+
+      # build_script.sh bundles frontend/dist but never builds it. `vite build`
+      # defaults to production mode, so frontend/.env.production supplies
+      # VITE_API_BASE_URL=http://localhost:8000/api — the path app_launcher.py
+      # mounts the backend under.
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          bun install --frozen-lockfile
+          bun run build
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      # pywebview uses the Cocoa/WebKit backend on macOS via pyobjc, which comes
+      # in through backend/requirements.txt. PyInstaller is build-only, so it is
+      # pinned here rather than added to that file.
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/requirements.txt
+          python -m pip install pyinstaller==6.21.0
+
+      # package_mac.sh runs build_script.sh, then stages InterAGt.app next to an
+      # /Applications symlink and compresses it with hdiutil.
+      - name: Build DMG
+        run: ./package_mac.sh
+
+      # package_mac.sh always writes dist/InterAGt.dmg regardless of arch; rename
+      # here so the two matrix legs don't clobber each other's artifact/release
+      # upload.
+      - name: Rename DMG for arch
+        run: mv dist/InterAGt.dmg dist/InterAGt-${{ matrix.arch }}.dmg
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: InterAGt-DMG-${{ matrix.arch }}
+          path: dist/InterAGt-${{ matrix.arch }}.dmg
+          if-no-files-found: error
+
+      - name: Attach DMG to release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$TAG" dist/InterAGt-${{ matrix.arch }}.dmg --clobber
