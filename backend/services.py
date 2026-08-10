@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from dataclasses import dataclass, field, replace as dc_replace
 from functools import lru_cache
@@ -9,21 +10,33 @@ from pathlib import Path
 from typing import Any, Iterable
 
 import numpy as np
+import openai
 import pandas as pd
 from alphagenome.data import gene_annotation, genome, transcript
 from alphagenome.models import dna_client, variant_scorers
+from openai import OpenAI
 
 from backend.core import (
+    DEFAULT_LLM_BASE_URL,
+    DEFAULT_LLM_MODEL,
+    LLM_CACHE_SIZE,
+    LLM_TIMEOUT_SECONDS,
     MODEL_CACHE_SIZE,
     RESOURCES_DIR,
+    InvalidLlmCredentialsError,
     InvalidRequestError,
     InvalidVariantError,
+    LlmServiceError,
     MissingApiKeyError,
+    MissingLlmKeyError,
     NoTrackDataError,
     NoVariantResultsError,
     UpstreamServiceError,
 )
 from helper_functions import resolve_variant
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -795,3 +808,437 @@ def predict_and_build_track_payload(
         transcript_extractor=transcript_extractor,
         skipped=skipped,
     )
+
+
+# ---------------------------------------------------------------------------
+# LLM-assisted variant summary
+# ---------------------------------------------------------------------------
+
+# Which output types describe an effect on a named gene vs. an effect on a
+# regulatory element. Mirrors the split the PoC used, extended with the
+# splice/polyadenylation scorers this app exposes.
+GENE_LINKED_OUTPUT_TYPES = {
+    "RNA_SEQ",
+    "CAGE",
+    "SPLICE_JUNCTIONS",
+    "SPLICE_SITES",
+    "SPLICE_SITE_USAGE",
+    "Polyadenylation",
+}
+REGULATORY_OUTPUT_TYPES = {
+    "ATAC",
+    "DNASE",
+    "CHIP_TF",
+    "CHIP_HISTONE",
+    "PROCAP",
+    "CONTACT_MAPS",
+}
+
+# What makes two rows of the same output type different things rather than the
+# same thing measured in another tissue. Mirrors the facet fields
+# `ScoresDisplay.tsx` uses for its bar charts; output types absent here fall
+# back to biosample_name, which never collapses distinct rows together.
+LLM_FACET_FIELDS = {
+    "RNA_SEQ": "gene_name",
+    "Polyadenylation": "gene_name",
+    "SPLICE_JUNCTIONS": "gene_name",
+    "SPLICE_SITES": "gene_name",
+    "SPLICE_SITE_USAGE": "gene_name",
+    "CHIP_TF": "transcription_factor",
+    "CHIP_HISTONE": "histone_mark",
+    "CAGE": "track_strand",
+    "PROCAP": "track_strand",
+}
+
+# A run can return thousands of rows, so the digest is capped three ways:
+# per facet group (don't spend the budget on one gene across many tissues),
+# per output type (don't let CHIP_TF crowd out RNA_SEQ), and overall. Rows are
+# taken strongest-first, so each cap keeps the highest-ranked survivors.
+LLM_ROWS_PER_GROUP = 2
+LLM_ROWS_PER_OUTPUT_TYPE = 14
+LLM_MAX_ROWS = 70
+
+LLM_SYSTEM_PROMPT = """\
+You are a genomics assistant helping a researcher interpret AlphaGenome \
+variant-effect predictions for a single variant. You are given the variant and \
+a ranked digest of that run's scores, split into gene-linked tracks (RNA_SEQ, \
+CAGE, splicing, polyadenylation) and regulatory tracks (ATAC, DNASE, CHIP_TF, \
+CHIP_HISTONE, PROCAP, contact maps).
+
+How to read the numbers:
+- raw_score is the scorer's native output. Its units differ per scorer, so raw \
+scores are NOT comparable across track types.
+- quantile_score is that raw score's rank against a genome-wide background \
+distribution of common human variants, computed per scorer and per track. \
+Signed scorers map to [-1, 1] (0 = the median common variant); unsigned, \
+magnitude-only scorers map to [0, 1]. A magnitude near 1 means the variant is \
+extreme relative to common variation. This is the metric to compare across \
+track types, and the digest is ranked by it.
+- Rows marked "magnitude only (unsigned scorer)" come from a scorer that \
+reports size of change without direction. For those the sign carries no \
+meaning: describe them as an altered or disrupted signal, never as increased \
+or decreased.
+- These are model predictions from reference-genome sequence context. They are \
+not measurements, not evidence of causality, and not clinical evidence.
+
+Write your answer as markdown, 150-250 words, no preamble and no restating of \
+the question. Use exactly these level-3 headings: "Most affected genes", \
+"Regulatory signal", "Caveats".
+
+Rules:
+- Ground every claim in the digest. Name the specific genes, biosamples and \
+track types it contains. Never introduce a score, track, tissue or gene that \
+is not in the digest.
+- You have no literature or database access in this mode. Do not cite papers, \
+PMIDs, accessions, or database records, and do not imply you looked anything \
+up. If general background about a named gene is relevant, mark it explicitly \
+as prior background knowledge rather than a finding from this run.
+- Do not make diagnostic, pathogenicity or clinical-actionability claims.
+- If every quantile magnitude is small, say plainly that this run shows no \
+strong predicted effect rather than manufacturing a narrative.
+"""
+
+
+@lru_cache(maxsize=LLM_CACHE_SIZE)
+def get_llm_client(api_key: str, base_url: str) -> OpenAI:
+    """Create and cache an OpenAI-compatible chat client per key + endpoint."""
+    if not api_key or not api_key.strip():
+        raise MissingLlmKeyError("Enter an LLM API key.")
+
+    try:
+        return OpenAI(
+            base_url=base_url.strip() or DEFAULT_LLM_BASE_URL,
+            api_key=api_key.strip(),
+            timeout=LLM_TIMEOUT_SECONDS,
+            max_retries=1,
+        )
+    except Exception as exc:
+        raise LlmServiceError("Could not create the LLM client.") from exc
+
+
+def _upstream_message(exc: Exception) -> str:
+    """Pull the provider's own error message out of an openai exception body."""
+    body = getattr(exc, "body", None)
+    if isinstance(body, dict):
+        message = body.get("message")
+        if isinstance(message, str) and message.strip():
+            return message.strip()
+        error = body.get("error")
+        if isinstance(error, dict) and isinstance(error.get("message"), str):
+            return str(error["message"]).strip()
+    return ""
+
+
+def _raise_llm_error(exc: Exception) -> None:
+    """Translate an openai client exception into an AppError subclass."""
+    if isinstance(exc, (openai.AuthenticationError, openai.PermissionDeniedError)):
+        raise InvalidLlmCredentialsError(
+            "The LLM endpoint rejected this API key."
+        ) from exc
+    # An unknown model name is a 404 on some providers and a 400 on others
+    # (Mistral returns "Invalid model: …"). Both mean the request as configured
+    # can't work, so surface the endpoint's own wording.
+    if isinstance(exc, (openai.NotFoundError, openai.BadRequestError)):
+        detail = _upstream_message(exc)
+        raise InvalidRequestError(
+            f"The LLM endpoint rejected the request: {detail}"
+            if detail
+            else "The LLM endpoint rejected the request. Check the model name."
+        ) from exc
+    if isinstance(exc, openai.APIConnectionError):
+        raise LlmServiceError(
+            "Could not reach the LLM endpoint. Check the base URL."
+        ) from exc
+    if isinstance(exc, openai.RateLimitError):
+        raise LlmServiceError(
+            "The LLM endpoint rate-limited this request. Try again shortly."
+        ) from exc
+    raise LlmServiceError("The LLM request failed.") from exc
+
+
+def verify_llm_credentials(api_key: str, base_url: str, model: str) -> str:
+    """Check key + endpoint + model with a single throwaway completion.
+
+    The frontend hides the AI-summary button until this passes, so this has to
+    exercise the same call path the real summary uses — listing models would
+    validate the key but not the model name.
+    """
+    model_name = model.strip() or DEFAULT_LLM_MODEL
+    client = get_llm_client(api_key, base_url)
+
+    try:
+        client.chat.completions.create(
+            model=model_name,
+            messages=[{"role": "user", "content": "ping"}],
+            max_tokens=1,
+            temperature=0,
+        )
+    except Exception as exc:
+        _raise_llm_error(exc)
+
+    return model_name
+
+
+def _as_float(value: Any) -> float | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return None if np.isnan(number) else number
+
+
+def _effect_size(quantile: float | None, raw: float | None) -> str:
+    """Bucket a row's magnitude, preferring the cross-scorer-comparable metric.
+
+    quantile_score is a percentile rank against common variation, so its
+    magnitude means the same thing for every track type; raw_score's does not.
+    The raw fallback thresholds are only reached when a scorer returned no
+    quantile at all.
+    """
+    if quantile is not None:
+        magnitude = abs(quantile)
+        if magnitude < 0.5:
+            return "within common-variant range"
+        if magnitude < 0.8:
+            return "low effect"
+        if magnitude < 0.95:
+            return "moderate effect"
+        return "high effect"
+
+    if raw is None:
+        return "no score"
+    magnitude = abs(raw)
+    if magnitude < 0.1:
+        return "no or low effect (raw only)"
+    if magnitude < 0.4:
+        return "moderate effect (raw only)"
+    return "high effect (raw only)"
+
+
+def _output_type_is_signed(rows: list[dict[str, Any]]) -> dict[str, bool]:
+    """Flag which output types produced signed scores in this run.
+
+    Gene-mask-active scorers return magnitude-only values, so a positive
+    raw_score there does not mean "increased". Only claim a direction for an
+    output type that produced at least one negative value somewhere in the
+    table.
+    """
+    signed: dict[str, bool] = {}
+    for row in rows:
+        output_type = str(row.get("output_type") or "unknown")
+        raw = _as_float(row.get("raw_score"))
+        quantile = _as_float(row.get("quantile_score"))
+        is_negative = (raw is not None and raw < 0) or (
+            quantile is not None and quantile < 0
+        )
+        signed[output_type] = signed.get(output_type, False) or is_negative
+    return signed
+
+
+def _row_label(row: dict[str, Any]) -> str:
+    """Describe what a row was measured on, beyond gene and output type."""
+    parts: list[str] = []
+    for key in ("biosample_name", "transcription_factor", "histone_mark"):
+        value = row.get(key)
+        if value is not None and str(value).strip() and str(value) != "nan":
+            parts.append(str(value))
+    strand = row.get("track_strand")
+    if strand is not None and str(strand).strip() in {"+", "-"}:
+        parts.append(f"strand {strand}")
+    return ", ".join(parts) if parts else "unspecified track"
+
+
+def _facet_value(row: dict[str, Any], output_type: str) -> str:
+    field_name = LLM_FACET_FIELDS.get(output_type, "biosample_name")
+    value = row.get(field_name)
+    if value is None or str(value).strip() in {"", "nan"}:
+        return "unspecified"
+    return str(value)
+
+
+def format_scores_for_llm(
+    rows: list[dict[str, Any]],
+    rows_per_group: int = LLM_ROWS_PER_GROUP,
+    rows_per_output_type: int = LLM_ROWS_PER_OUTPUT_TYPE,
+    max_rows: int = LLM_MAX_ROWS,
+) -> tuple[str, int, bool]:
+    """Flatten scored rows into the ranked text digest sent to the model.
+
+    Returns the digest, how many rows it covers, and whether rows were dropped.
+    """
+    if not rows:
+        raise InvalidRequestError("No scored rows to summarize.")
+
+    def sort_key(row: dict[str, Any]) -> float:
+        quantile = _as_float(row.get("quantile_score"))
+        if quantile is not None:
+            return abs(quantile)
+        raw = _as_float(row.get("raw_score"))
+        return abs(raw) if raw is not None else 0.0
+
+    signed_by_type = _output_type_is_signed(rows)
+    ranked = sorted(rows, key=sort_key, reverse=True)
+
+    seen_per_group: dict[tuple[str, str], int] = {}
+    seen_per_output_type: dict[str, int] = {}
+    kept: list[dict[str, Any]] = []
+    for row in ranked:
+        output_type = str(row.get("output_type") or "unknown")
+        if seen_per_output_type.get(output_type, 0) >= rows_per_output_type:
+            continue
+
+        group = (output_type, _facet_value(row, output_type))
+        if seen_per_group.get(group, 0) >= rows_per_group:
+            continue
+
+        seen_per_group[group] = seen_per_group.get(group, 0) + 1
+        seen_per_output_type[output_type] = seen_per_output_type.get(output_type, 0) + 1
+        kept.append(row)
+        if len(kept) >= max_rows:
+            break
+
+    truncated = len(kept) < len(rows)
+
+    def category(output_type: str) -> str:
+        if output_type in GENE_LINKED_OUTPUT_TYPES:
+            return "Gene-linked"
+        if output_type in REGULATORY_OUTPUT_TYPES:
+            return "Regulatory"
+        return "Other"
+
+    sections: dict[str, list[str]] = {"Gene-linked": [], "Regulatory": [], "Other": []}
+    for row in kept:
+        output_type = str(row.get("output_type") or "unknown")
+        raw = _as_float(row.get("raw_score"))
+        quantile = _as_float(row.get("quantile_score"))
+
+        if not signed_by_type.get(output_type, False):
+            direction = "magnitude only (unsigned scorer)"
+        elif raw is not None and raw < 0:
+            direction = "decreased"
+        elif raw is not None and raw > 0:
+            direction = "increased"
+        else:
+            direction = "no change"
+
+        gene = row.get("gene_name")
+        gene_part = (
+            f"{gene} | " if gene not in (None, "", "nan") and str(gene) != "nan" else ""
+        )
+        raw_text = f"{raw:.4g}" if raw is not None else "n/a"
+        quantile_text = f"{quantile:+.3f}" if quantile is not None else "n/a"
+        hpo_flag = (
+            " | matches a selected HPO term"
+            if _as_float(row.get("hpo_gene_relevance")) == 1.0
+            else ""
+        )
+
+        sections[category(output_type)].append(
+            f"{gene_part}{output_type} | {_row_label(row)} | {direction} | "
+            f"raw_score: {raw_text} | quantile_score: {quantile_text} | "
+            f"{_effect_size(quantile, raw)}{hpo_flag}"
+        )
+
+    lines: list[str] = []
+    for name in ("Gene-linked", "Regulatory", "Other"):
+        if sections[name]:
+            lines.append(f"--- {name} tracks ---")
+            lines.extend(sections[name])
+            lines.append("")
+
+    if truncated:
+        lines.append(
+            f"(Digest shows the top {len(kept)} of {len(rows)} scored rows: at "
+            f"most {rows_per_group} per gene/factor and {rows_per_output_type} "
+            "per track type, strongest first.)"
+        )
+
+    return "\n".join(lines).strip(), len(kept), truncated
+
+
+def build_summary_prompt(
+    variant_str: str,
+    organism_label: str,
+    scores_digest: str,
+    hpo_terms: Iterable[str] | None = None,
+) -> str:
+    parts = variant_str.split(":")
+    if len(parts) == 4:
+        chromosome, position, reference, alternate = parts
+        variant_block = (
+            f"chromosome: {chromosome}\n"
+            f"position: {position}\n"
+            f"reference allele: {reference}\n"
+            f"alternate allele: {alternate}"
+        )
+    else:
+        variant_block = f"variant: {variant_str}"
+
+    hpo_list = [term for term in (hpo_terms or []) if term]
+    hpo_block = ""
+    if hpo_list:
+        hpo_block = (
+            "\nThe researcher selected these HPO phenotype terms; rows for genes "
+            "annotated to them are flagged in the digest. Treat the flag as the "
+            "researcher's interest, not as evidence of a link:\n"
+            + "\n".join(f"- {term}" for term in hpo_list)
+            + "\n"
+        )
+
+    return (
+        f"Organism: {organism_label}\n"
+        f"{variant_block}\n"
+        f"{hpo_block}\n"
+        "AlphaGenome scores for this variant, ranked by |quantile_score|:\n"
+        f"{scores_digest}\n"
+    )
+
+
+def summarize_variant_scores(
+    api_key: str,
+    base_url: str,
+    model: str,
+    variant_str: str,
+    organism_label: str,
+    rows: list[dict[str, Any]],
+    hpo_terms: Iterable[str] | None = None,
+) -> dict[str, Any]:
+    """Turn a scored variant into an LLM-written interpretation."""
+    scores_digest, row_count, truncated = format_scores_for_llm(rows)
+    model_name = model.strip() or DEFAULT_LLM_MODEL
+    client = get_llm_client(api_key, base_url)
+    prompt = build_summary_prompt(variant_str, organism_label, scores_digest, hpo_terms)
+
+    LOGGER.info(
+        "llm_summary_requested model=%s variant=%s rows=%s truncated=%s",
+        model_name,
+        variant_str,
+        row_count,
+        truncated,
+    )
+
+    try:
+        response = client.chat.completions.create(
+            model=model_name,
+            messages=[
+                {"role": "system", "content": LLM_SYSTEM_PROMPT},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.2,
+        )
+    except Exception as exc:
+        _raise_llm_error(exc)
+
+    summary = (response.choices[0].message.content or "").strip() if response.choices else ""
+    if not summary:
+        raise LlmServiceError("The LLM returned an empty summary.")
+
+    return {
+        "summary": summary,
+        "model": response.model or model_name,
+        "scores_digest": scores_digest,
+        "row_count": row_count,
+        "truncated": truncated,
+    }

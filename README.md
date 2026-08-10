@@ -29,6 +29,16 @@ By inputting a variant, researchers can:
 - Select from **ontology-annotated tissues/cell types** (e.g., `UBERON:0002048` for lung)
 - **No coding required**: Access cutting-edge predictions through a user-friendly interface
 
+### **AI summary (experimental, optional)**
+
+The Scores view can ask a large language model to write a short interpretation of a run. It is **off by default** and only appears once you save an LLM API key in the header key dialog, next to your AlphaGenome key.
+
+- Works with **any OpenAI-compatible chat-completions endpoint**; the base URL and model are configurable in the same dialog and default to Mistral's API. The key is stored in your browser and sent in the request body, never read from the server's environment.
+- Saving runs a one-token verification call against your endpoint. The summary button only renders after that succeeds, so a bad key or model name is caught in the dialog rather than at use time.
+- The model receives the variant, the organism, any selected HPO terms, and a ranked digest of the scores (top rows per gene/factor and track type, ranked by `|quantile_score|`) — **not** the full table and not the track plots. Every summary includes a disclosure showing the exact text that was sent.
+- **Your variant and scores leave the machine** and go to the provider you configured. Leave the LLM key empty to disable the feature entirely.
+- The model has no literature or database access in this mode (yet), so it cannot cite papers or verify claims. Output is a reading aid, not a finding, and not clinical advice.
+
 
 ## **References**
 - Žiga Avsec, Natasha Latysheva, Jun Cheng, *et al.* **Advancing regulatory variant effect prediction with AlphaGenome.** *Nature*, 649(8099):1206–1218, 2026. [DOI:10.1038/s41586-025-10014-0](https://doi.org/10.1038/s41586-025-10014-0)

@@ -156,6 +156,27 @@ export interface TrackPlotResponse {
   transcript_warning: string | null
 }
 
+/** Endpoint config for the experimental AI summary. See `llmSettings.ts`. */
+export interface LlmCredentials {
+  llm_api_key: string
+  llm_base_url: string
+  llm_model: string
+}
+
+export interface LlmVerifyResponse {
+  ok: boolean
+  model: string
+}
+
+export interface AiSummaryResponse {
+  summary: string
+  model: string
+  /** The flattened score text the backend actually sent to the model. */
+  scores_digest: string
+  row_count: number
+  truncated: boolean
+}
+
 interface ApiErrorBody {
   error: {
     code: string
@@ -258,6 +279,16 @@ const api = {
   getStoredApiKey: () => request<StoredApiKeyResponse>('/keystore/api-key'),
   setStoredApiKey: (apiKey: string) =>
     post<StoredApiKeyResponse>('/keystore/api-key', { api_key: apiKey }),
+  postLlmVerify: (payload: LlmCredentials) =>
+    post<LlmVerifyResponse>('/ai/verify', payload),
+  postAiSummary: (
+    payload: LlmCredentials & {
+      variant: string
+      organism: string
+      rows: ScoreRow[]
+      hpo_terms: string[]
+    },
+  ) => post<AiSummaryResponse>('/ai/summary', payload),
 }
 
 // ── API key persistence ─────────────────────────────────────────────────────
@@ -370,4 +401,25 @@ export function useTrackPlot() {
       tracks: string[]
     }
   >({ mutationFn: (v) => api.postTrackPlot(v), retry: false })
+}
+
+/** One throwaway completion to prove the key, endpoint and model all work. */
+export function useVerifyLlm() {
+  return useMutation<LlmVerifyResponse, ApiRequestError, LlmCredentials>({
+    mutationFn: (v) => api.postLlmVerify(v),
+    retry: false,
+  })
+}
+
+export function useAiSummary() {
+  return useMutation<
+    AiSummaryResponse,
+    ApiRequestError,
+    LlmCredentials & {
+      variant: string
+      organism: string
+      rows: ScoreRow[]
+      hpo_terms: string[]
+    }
+  >({ mutationFn: (v) => api.postAiSummary(v), retry: false })
 }

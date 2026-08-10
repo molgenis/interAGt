@@ -2,6 +2,7 @@ alphagenome==0.7.0
 fastapi==0.139.0
 keyring==25.7.0
 numpy==2.5.1
+openai==2.53.0
 pandas==3.0.3
 plotly==6.9.0
 pyarrow==24.0.0

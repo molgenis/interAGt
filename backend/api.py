@@ -8,7 +8,11 @@ from fastapi import APIRouter
 from backend import services
 from backend.core import UpstreamServiceError
 from backend.schemas import (
+    AiSummaryRequest,
+    AiSummaryResponse,
     HpoTermsResponse,
+    LlmVerifyRequest,
+    LlmVerifyResponse,
     NormalizeRequest,
     NormalizeResponse,
     OntologyTermsRequest,
@@ -181,3 +185,37 @@ def tracks_plot(payload: TracksPlotRequest) -> dict:
     )
     result["transcript_warning"] = transcript_warning
     return result
+
+
+# ---------------------------------------------------------------------------
+# AI summary
+# ---------------------------------------------------------------------------
+
+ai_router = APIRouter()
+
+
+@ai_router.post("/verify", response_model=LlmVerifyResponse)
+def verify_llm(payload: LlmVerifyRequest) -> dict:
+    model = services.verify_llm_credentials(
+        api_key=payload.llm_api_key,
+        base_url=payload.llm_base_url,
+        model=payload.llm_model,
+    )
+    return {"ok": True, "model": model}
+
+
+# Defined with `def`, not `async def`: the OpenAI client call is blocking, so
+# FastAPI runs this in a threadpool instead of stalling the event loop.
+@ai_router.post("/summary", response_model=AiSummaryResponse)
+def ai_summary(payload: AiSummaryRequest) -> dict:
+    organism_label = services.get_organism_label(payload.organism)
+
+    return services.summarize_variant_scores(
+        api_key=payload.llm_api_key,
+        base_url=payload.llm_base_url,
+        model=payload.llm_model,
+        variant_str=payload.variant,
+        organism_label=organism_label,
+        rows=payload.rows,
+        hpo_terms=payload.hpo_terms,
+    )

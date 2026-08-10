@@ -12,6 +12,7 @@ $args = @(
     "--collect-all", "fastapi"
     "--collect-all", "pywebview"
     "--collect-all", "keyring"
+    "--collect-all", "openai"
     "--collect-all", "clr_loader"
     "--collect-all", "pythonnet"
     "--hidden-import", "clr"

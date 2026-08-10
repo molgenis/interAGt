@@ -5,6 +5,8 @@ from typing import Any, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
+from backend.core import DEFAULT_LLM_BASE_URL, DEFAULT_LLM_MODEL
+
 
 ALLOWED_SEQUENCE_LENGTHS = [16384, 131072, 524288, 1048576]
 
@@ -136,3 +138,44 @@ class TracksPlotResponse(BaseModel):
     transcripts: list[dict[str, Any]]
     warnings: list[dict[str, Any]] = Field(default_factory=list)
     transcript_warning: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# AI summary
+# ---------------------------------------------------------------------------
+
+
+class LlmSettings(BaseModel):
+    """Where to send the chat-completions request.
+
+    Any OpenAI-compatible endpoint works; the key is supplied per request and
+    never read from the environment, matching the AlphaGenome key's posture.
+    """
+
+    llm_api_key: str
+    llm_base_url: str = DEFAULT_LLM_BASE_URL
+    llm_model: str = DEFAULT_LLM_MODEL
+
+
+class LlmVerifyRequest(LlmSettings):
+    pass
+
+
+class LlmVerifyResponse(BaseModel):
+    ok: bool
+    model: str
+
+
+class AiSummaryRequest(LlmSettings):
+    variant: str
+    organism: str = "Human (hg38)"
+    rows: list[dict[str, Any]]
+    hpo_terms: list[str] = Field(default_factory=list)
+
+
+class AiSummaryResponse(BaseModel):
+    summary: str
+    model: str
+    scores_digest: str
+    row_count: int
+    truncated: bool

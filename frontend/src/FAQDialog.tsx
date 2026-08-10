@@ -55,6 +55,15 @@ const FAQ_ITEMS = [
     ],
   },
   {
+    question: 'What is the "AI summary" on the Scores view?',
+    answer: [
+      "It's an experimental, optional feature. If you add an LLM API key in the header key dialog, a button appears above the score charts that asks a large language model to write a short interpretation of the run.",
+      'The model only sees the variant, the organism, any HPO terms you picked, and a ranked digest of your scores — the top rows per gene, factor and track type. You can expand "What was sent" under any summary to read the exact text it received.',
+      'That digest and your variant are sent to whichever LLM provider you configured, so do not enable it if your variant is sensitive. Leaving the LLM key empty disables the feature entirely.',
+      'The model has no literature or database access, so it cannot cite papers or verify anything against published evidence. Treat the output as a reading aid for the numbers already on screen, never as a finding or as clinical advice.',
+    ],
+  },
+  {
     question: 'Do HPO phenotype terms and UBERON/CL/CLO/EFO tissue terms interact?',
     answer: [
       "No, they're independent and don't reference each other.",

@@ -10,7 +10,13 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from backend.api import health_router, metadata_router, plots_router, variants_router
+from backend.api import (
+    ai_router,
+    health_router,
+    metadata_router,
+    plots_router,
+    variants_router,
+)
 from backend.core import AppError, configure_logging, get_cors_origins
 
 
@@ -112,6 +118,7 @@ def create_app() -> FastAPI:
     app.include_router(metadata_router, prefix="/metadata", tags=["metadata"])
     app.include_router(variants_router, prefix="/variants", tags=["variants"])
     app.include_router(plots_router, prefix="/plots", tags=["plots"])
+    app.include_router(ai_router, prefix="/ai", tags=["ai"])
 
     LOGGER.info("app_started log_file=%s cors_origins=%s", LOG_FILE_PATH, get_cors_origins())
 

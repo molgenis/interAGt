@@ -20,6 +20,7 @@ PYTHON="$(command -v python || command -v python3)"
   --collect-all fastapi \
   --collect-all pywebview \
   --collect-all keyring \
+  --collect-all openai \
   --add-data "backend:backend" \
   --add-data "helper_functions.py:."\
   --add-data "launcher_keystore.py:."\

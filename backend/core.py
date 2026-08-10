@@ -19,6 +19,15 @@ RESOURCES_DIR = Path(
 ).expanduser().resolve()
 MODEL_CACHE_SIZE = max(1, int(os.getenv("MODEL_CACHE_SIZE", "4")))
 
+# LLM summaries. The key, endpoint and model all arrive in the request body
+# (same posture as the AlphaGenome key); these are only the fallbacks used when
+# a request omits endpoint/model. Keep in sync with the defaults in
+# `frontend/src/llmSettings.ts`.
+LLM_CACHE_SIZE = max(1, int(os.getenv("LLM_CACHE_SIZE", "4")))
+DEFAULT_LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://api.mistral.ai/v1")
+DEFAULT_LLM_MODEL = os.getenv("LLM_MODEL", "mistral-large-latest")
+LLM_TIMEOUT_SECONDS = float(os.getenv("LLM_TIMEOUT_SECONDS", "120"))
+
 DEFAULT_LOG_DIR = PROJECT_ROOT / "logs"
 DEFAULT_LOG_FILE = DEFAULT_LOG_DIR / "backend.log"
 
@@ -73,6 +82,31 @@ class MissingApiKeyError(AppError):
 
 class UpstreamServiceError(AppError):
     code = "upstream_failure"
+    status_code = 502
+
+
+class MissingLlmKeyError(AppError):
+    """No LLM key supplied for an AI-summary request."""
+
+    code = "missing_llm_key"
+    status_code = 401
+
+
+class InvalidLlmCredentialsError(AppError):
+    """The LLM endpoint rejected the supplied key."""
+
+    code = "invalid_llm_credentials"
+    status_code = 401
+
+
+class LlmServiceError(AppError):
+    """The LLM endpoint was unreachable or failed the request.
+
+    Kept separate from `UpstreamServiceError` so the frontend can tell an
+    AlphaGenome outage apart from a misconfigured LLM endpoint.
+    """
+
+    code = "llm_failure"
     status_code = 502
 
 

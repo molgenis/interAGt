@@ -14,6 +14,13 @@ import {
   type TrackIssue,
 } from '@/api'
 import { TRACK_EXPLANATIONS, SCORER_EXPLANATIONS, ALL_RESULTS_EXPLANATION } from '@/trackExplanations'
+import {
+  isLlmReady,
+  loadLlmSettings,
+  saveLlmSettings,
+  type LlmSettings,
+} from '@/llmSettings'
+import { AiSummaryCard } from '@/AiSummaryCard'
 import { ApiKeyDialog } from '@/ApiKeyDialog'
 import { AboutDialog } from '@/AboutDialog'
 import { FAQDialog } from '@/FAQDialog'
@@ -199,6 +206,7 @@ export default function App() {
   const { theme, setTheme, isDark } = useTheme()
 
   const [apiKey, setApiKey] = useState('')
+  const [llm, setLlm] = useState<LlmSettings>(loadLlmSettings)
   const [mode, setMode] = useState<Mode>('scores')
   const [organismValue, setOrganismValue] = useState(DEFAULT_ORGANISM_VALUE)
   const [variantInput, setVariantInput] = useState('')
@@ -231,6 +239,11 @@ export default function App() {
   function handleSaveApiKey(key: string) {
     setApiKey(key)
     void persistApiKey(key)
+  }
+
+  function saveLlm(settings: LlmSettings) {
+    saveLlmSettings(settings)
+    setLlm(settings)
   }
 
   useEffect(() => {
@@ -365,7 +378,12 @@ export default function App() {
           <AboutDialog />
           <FAQDialog />
           <ThemeToggle theme={theme} setTheme={setTheme} />
-          <ApiKeyDialog apiKey={apiKey} onSave={handleSaveApiKey} />
+          <ApiKeyDialog
+            apiKey={apiKey}
+            llm={llm}
+            onSave={handleSaveApiKey}
+            onSaveLlm={saveLlm}
+          />
         </div>
       </header>
 
@@ -678,6 +696,19 @@ export default function App() {
                   </div>
                   
                 </details>
+
+                {/* The card owns its own mutation, so it is keyed on the score
+                    run to drop a stale summary when new scores come back. */}
+                {isLlmReady(llm) && (
+                  <AiSummaryCard
+                    key={scoreMutation.submittedAt}
+                    llm={llm}
+                    variant={scoreMutation.variables?.variant ?? ''}
+                    organism={scoreMutation.variables?.organism ?? organismValue}
+                    rows={scoreData.rows}
+                    hpoTerms={scoreMutation.variables?.hpo_terms ?? []}
+                  />
+                )}
 
                 <ScoresSummaryCharts
                   rows={scoreData.rows}

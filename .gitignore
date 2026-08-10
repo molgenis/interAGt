@@ -2,3 +2,8 @@
 build
 dist
 *.spec
+
+.*
+!.gitignore
+__pycache__/
+logs/

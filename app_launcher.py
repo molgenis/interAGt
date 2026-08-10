@@ -113,7 +113,7 @@ def main():
     # `uvicorn --reload` directly for backend auto-reload during development.
     server_thread = threading.Thread(
         target=uvicorn.run,
-        args=("app_launcher:app",),
+        args=(app,),
         kwargs={"host": "0.0.0.0", "port": 8000},
         daemon=True,
     )
