@@ -4,7 +4,7 @@
 <img src="resources/logo_interAGt.svg" alt="logo" width="60%" />
 </p>
 
-## **InterAGt: A user-friendly interface for analyzing genetic variant effects**
+## **InterAGt: An interactive interface for predicting genetic variant effects using AlphaGenome**
 ![](resources//interAGt.gif)
 ## **About**
 

@@ -63,6 +63,8 @@ export const COLUMN_EXPLANATIONS: TrackExplanations = {
   gene_id: 'Ensembl gene ID this score is attributed to.',
   biosample_name: 'Tissue or cell type the underlying track was measured in.',
   transcription_factor: 'Transcription factor being profiled, populated for CHIP_TF rows only.',
+  histone_mark: 'Histone mark being profiled, populated for CHIP_HISTONE rows only.',
+  track_strand: 'Forward (+) or reverse (-) orientation matching the reference assembly, that is being profiled.',
   raw_score:
     "The scorer's native output (log2 fold-change, mean, or L2 norm, depending on the scorer). Units differ per scorer, not comparable across track types.",
   quantile_score:

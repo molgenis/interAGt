@@ -12,6 +12,8 @@ const PREFERRED_COLUMNS = [
   'gene_id',
   'biosample_name',
   'transcription_factor',
+  'histone_mark',
+  'track_strand',
   'raw_score',
   'quantile_score',
   'hpo_gene_relevance',
@@ -93,7 +95,7 @@ function toNumber(value: ScoreRow[string]): number {
 function dedupe(rows: ScoreRow[]): ScoreRow[] {
   const byKey = new Map<string, ScoreRow>()
   for (const row of rows) {
-    const key = `${row.biosample_name}||${row.gene_name}||${row.gene_id}`
+    const key = `${row.biosample_name}||${row.gene_name}||${row.gene_id}||${row.histone_mark}||${row.track_strand}`
     byKey.set(key, row)
   }
   return [...byKey.values()]
@@ -185,7 +187,7 @@ function FacetGrid({
       }}
     >
       {[...groups.entries()].map(([name, groupRows]) => (
-        <BarPanel key={name} title={name} rows={groupRows} isDark={isDark} />
+          <BarPanel key={name} title={field === 'track_strand' ? `strand ${name}` : name } rows={groupRows} isDark={isDark} />
       ))}
     </div>
   );
@@ -220,6 +222,32 @@ export function ScoresSummaryCharts({
               isDark={isDark}
             />
           )
+        else if (outputType === "CAGE") {
+          chart = (
+            <FacetGrid
+              rows={filtered}
+              field="track_strand"
+              isDark={isDark}
+            />
+          );
+        }
+        else if (outputType === "PROCAP") {
+          chart = (
+            <FacetGrid
+              rows={filtered}
+              field="track_strand"
+              isDark={isDark}
+            />
+          );
+        } else if (outputType === "CHIP_HISTONE") {
+          chart = (
+            <FacetGrid
+              rows={filtered}
+              field="histone_mark"
+              isDark={isDark}
+            />
+          );
+        } 
         else
           chart = (
             <BarPanel
