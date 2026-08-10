@@ -12,18 +12,10 @@ name: Build macOS DMG
 # Builds are unsigned and un-notarised — Gatekeeper will quarantine them on
 # first launch, same caveat the README already gives for local builds.
 on:
-  # workflow_dispatch only shows up in the Actions UI once this file is on the
-  # default branch; until then, the push trigger below is what fires.
+  # Manual only, plus release publishes below — no push trigger. This repo is
+  # private, so macOS minutes bill at 10x, and the arm64+Intel matrix doubles
+  # that; do not re-add a push trigger without discussing cost first.
   workflow_dispatch:
-  push:
-    branches: ["**"]
-    # Deliberately narrow: this repo is private, so macOS minutes bill at 10x.
-    # Build only when the packaging inputs themselves change.
-    paths:
-      - ".github/workflows/build-macos.yml"
-      - "build_script.sh"
-      - "package_mac.sh"
-      - "app_launcher.py"
   # Publishing a GitHub release attaches the DMG to it.
   release:
     types: [published]

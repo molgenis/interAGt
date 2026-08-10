@@ -4,19 +4,10 @@ name: Build Windows installer
 # a Windows host. This runs package_win.ps1 (build_win.ps1 + Inno Setup) on a
 # windows-latest runner and uploads dist/InterAGt-Setup.exe.
 on:
-  # workflow_dispatch only shows up in the Actions UI once this file is on the
-  # default branch; until then, the push trigger below is what fires.
+  # Manual only, plus release publishes below — no push trigger. This repo is
+  # private, so Windows minutes bill at 2x; do not re-add a push trigger
+  # without discussing cost first.
   workflow_dispatch:
-  push:
-    branches: ["**"]
-    # Deliberately narrow: this repo is private, so Windows minutes bill at 2x.
-    # Build only when the packaging inputs themselves change.
-    paths:
-      - ".github/workflows/build-windows.yml"
-      - "build_win.ps1"
-      - "package_win.ps1"
-      - "installer_win.iss"
-      - "app_launcher.py"
   # Publishing a GitHub release attaches the installer to it.
   release:
     types: [published]
