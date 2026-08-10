@@ -21,5 +21,8 @@ $args = @(
     "--add-data", "frontend/dist:frontend/dist"
     "app_launcher.py"
 )
-py -m PyInstaller @args
+# `python` is what actions/setup-python puts on PATH; the `py` launcher is not
+# guaranteed to be installed there. Prefer `python`, fall back to `py` locally.
+$python = if (Get-Command python -ErrorAction SilentlyContinue) { "python" } else { "py" }
+& $python -m PyInstaller @args
 
