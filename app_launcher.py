@@ -1,11 +1,13 @@
+from __future__ import annotations
+
 import argparse
 import threading
 import subprocess
-import webbrowser
 import atexit
 import time
 from pathlib import Path
 
+import webview
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
@@ -62,45 +64,45 @@ def main():
             text=True
         )
 
-        # Ensure frontend process is cleaned up on exit
-        def cleanup():
-            if frontend_process and frontend_process.poll() is None:
-                print("\nShutting down frontend dev server...")
-                frontend_process.terminate()
-                frontend_process.wait()
-
-        atexit.register(cleanup)
-
         # Wait for Bun to start
         time.sleep(2)
 
-        # Open browser to frontend dev server
-        def open_browser():
-            webbrowser.open("http://localhost:4173")
-
-        threading.Timer(1.0, open_browser).start()
+        window_url = "http://localhost:4173"
     else:
-        # Production mode: build and serve static files
+        # Production mode: serve static files built into frontend/dist
+        window_url = "http://localhost:8000"
 
-        def open_browser():
-            webbrowser.open("http://localhost:8000")
-
-        threading.Timer(2.0, open_browser).start()
-
-    try:
-        # Start FastAPI
-        uvicorn.run(
-            "app_launcher:app",
-            host="0.0.0.0",
-            port=8000,
-            reload=args.dev  # Enable reload in dev mode
-        )
-    except KeyboardInterrupt:
-        pass
-    finally:
+    def cleanup():
         if frontend_process and frontend_process.poll() is None:
+            print("\nShutting down frontend dev server...")
             frontend_process.terminate()
             frontend_process.wait()
+
+    atexit.register(cleanup)
+
+    # uvicorn's own reload supervisor installs signal handlers, which only
+    # works on the main thread. That thread is needed for webview.start()
+    # below (required on macOS), so reload is not available here; use
+    # `uvicorn --reload` directly for backend auto-reload during development.
+    server_thread = threading.Thread(
+        target=uvicorn.run,
+        args=("app_launcher:app",),
+        kwargs={"host": "0.0.0.0", "port": 8000},
+        daemon=True,
+    )
+    server_thread.start()
+
+    # Give uvicorn a moment to bind the port before the window loads it,
+    # matching the startup delay the old browser-tab launch used.
+    time.sleep(2)
+
+    webview.create_window("InterAGt", window_url)
+    webview.start()
+
+    # webview.start() blocks until the window is closed; run cleanup here
+    # since atexit only fires on interpreter exit and the daemon uvicorn
+    # thread alone won't trigger that.
+    cleanup()
 
 if __name__ == "__main__":
     main()

@@ -5,5 +5,6 @@ pandas==3.0.3
 plotly==6.9.0
 pyarrow==24.0.0
 pydantic==2.13.4
+pywebview==6.2.1
 requests==2.34.2
 uvicorn==0.51.0

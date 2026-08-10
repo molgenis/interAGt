@@ -40,7 +40,7 @@ Pre-compiled binaries for Windows, macOS, and Linux are available at **[INSERT D
 After downloading:
 
 Extract the archive.
-Launch the executable and the program will open at: http://localhost:8000.
+Launch the executable and the app will open in its own window (backed by `http://localhost:8000`).
 
 ---
 ### **Option 2: Run Directly (Recommended for Development)**
@@ -59,7 +59,7 @@ python app_launcher.py
 python app_launcher.py --dev
 ```
 
-The app will be available at:
+Both open a native app window (via `pywebview`), backed by:
 - Production: `http://localhost:8000`
 - Preview: Frontend at `http://localhost:4173`, Backend at `http://localhost:8000`
 
@@ -81,13 +81,20 @@ cd frontend && bun run dev       # http://localhost:5173, hot reload
 ```bash
 ./build_script.sh
 ```
-The executable will be created in the `dist/` directory.
+Produces `dist/InterAGt.app` (and `dist/InterAGt/` unbundled).
 
 **Windows:**
 ```powershell
 .\build_win.ps1
 ```
-The executable will be created as `dist\AGInterpret.exe`.
+Produces `dist\InterAGt\InterAGt.exe`.
+
+**To wrap the build into an installer** (`dist/InterAGt.dmg` on macOS via `hdiutil`, `dist\InterAGt-Setup.exe` on Windows via [Inno Setup 6](https://jrsoftware.org/isdl.php)):
+```bash
+./package_mac.sh       # macOS
+.\package_win.ps1      # Windows
+```
+These builds are unsigned — macOS Gatekeeper / Windows SmartScreen will warn on first launch.
 
 ---
 
