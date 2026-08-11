@@ -1,6 +1,6 @@
 #!/bin/bash
 set -euo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")"
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 # `python` is what actions/setup-python puts on PATH; a bare `python` is not
 # guaranteed to exist on a plain macOS install. Prefer `python`, fall back to

@@ -1,8 +1,8 @@
 name: Build Linux AppImage
 
 # PyInstaller cannot cross-compile, so the Linux build has to run on a Linux
-# host of the target arch. This runs package_linux.sh (build_linux.sh +
-# appimagetool) and uploads one AppImage per arch.
+# host of the target arch. This runs packaging/package_linux.sh
+# (packaging/build_linux.sh + appimagetool) and uploads one AppImage per arch.
 #
 # Runner images are deliberately different per arch, because a PyInstaller
 # binary only runs on glibc at least as new as its build host's, and the Qt
@@ -84,13 +84,13 @@ jobs:
           python -m pip install "pywebview[qt]==6.2.1"
           python -m pip install pyinstaller==6.21.0
 
-      # package_linux.sh runs build_linux.sh, then stages an AppDir with a
-      # .desktop entry and icon and compresses it with appimagetool, which it
-      # downloads for $ARCH.
+      # packaging/package_linux.sh runs packaging/build_linux.sh, then stages
+      # an AppDir with a .desktop entry and icon and compresses it with
+      # appimagetool, which it downloads for $ARCH.
       - name: Build AppImage
         env:
           ARCH: ${{ matrix.arch }}
-        run: ./package_linux.sh
+        run: ./packaging/package_linux.sh
 
       # package_linux.sh always writes dist/InterAGt.AppImage regardless of
       # arch; rename here so the two matrix legs don't clobber each other's

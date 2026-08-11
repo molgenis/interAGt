@@ -1,8 +1,9 @@
 name: Build macOS DMG
 
 # PyInstaller cannot cross-compile, so the macOS .app has to be built on a macOS
-# host of the target arch. This runs package_mac.sh (build_mac.sh + hdiutil)
-# on both an Apple silicon and an Intel runner and uploads one DMG per arch.
+# host of the target arch. This runs packaging/package_mac.sh
+# (packaging/build_mac.sh + hdiutil) on both an Apple silicon and an Intel
+# runner and uploads one DMG per arch.
 #
 # Runner labels: macos-latest (arm64) and macos-15-intel (x86_64). macos-13,
 # the old Intel label, was fully retired 2025-12-04; macos-15-intel is its
@@ -61,10 +62,11 @@ jobs:
           python -m pip install -r backend/requirements.txt
           python -m pip install pyinstaller==6.21.0
 
-      # package_mac.sh runs build_mac.sh, then stages InterAGt.app next to an
-      # /Applications symlink and compresses it with hdiutil.
+      # packaging/package_mac.sh runs packaging/build_mac.sh, then stages
+      # InterAGt.app next to an /Applications symlink and compresses it with
+      # hdiutil.
       - name: Build DMG
-        run: ./package_mac.sh
+        run: ./packaging/package_mac.sh
 
       # package_mac.sh always writes dist/InterAGt.dmg regardless of arch; rename
       # here so the two matrix legs don't clobber each other's artifact/release

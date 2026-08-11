@@ -12,7 +12,7 @@
 #     dropped here. The Linux desktop entry and icon are applied by
 #     package_linux.sh when it assembles the AppImage.
 set -euo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")"
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 # `python` is what actions/setup-python puts on PATH; fall back to `python3`
 # locally, matching build_mac.sh.

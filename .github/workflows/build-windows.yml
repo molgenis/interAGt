@@ -1,8 +1,8 @@
 name: Build Windows installer
 
 # PyInstaller cannot cross-compile, so the Windows installer has to be built on
-# a Windows host. This runs package_win.ps1 (build_win.ps1 + Inno Setup) on a
-# windows-latest runner and uploads dist/InterAGt-Setup.exe.
+# a Windows host. This runs packaging/package_win.ps1 (packaging/build_win.ps1
+# + Inno Setup) on a windows-latest runner and uploads dist/InterAGt-Setup.exe.
 on:
   # Manual only, plus release publishes below — no push trigger. This repo is
   # private, so Windows minutes bill at 2x; do not re-add a push trigger
@@ -51,11 +51,11 @@ jobs:
       - name: Install Inno Setup
         run: choco install innosetup --no-progress -y
 
-      # package_win.ps1 runs build_win.ps1, then locates ISCC.exe (chocolatey
-      # installs it to the "Program Files (x86)\Inno Setup 6" path it falls
-      # back to) and compiles installer_win.iss.
+      # packaging/package_win.ps1 runs packaging/build_win.ps1, then locates
+      # ISCC.exe (chocolatey installs it to the "Program Files (x86)\Inno
+      # Setup 6" path it falls back to) and compiles packaging/installer_win.iss.
       - name: Build installer
-        run: .\package_win.ps1
+        run: .\packaging\package_win.ps1
 
       - uses: actions/upload-artifact@v7
         with:

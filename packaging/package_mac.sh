@@ -3,9 +3,9 @@
 # distributable .dmg (dist/InterAGt.dmg) with an /Applications symlink for
 # drag-and-drop install.
 set -euo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")"
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-./build_mac.sh
+./packaging/build_mac.sh
 
 APP="dist/InterAGt.app"
 if [ ! -d "$APP" ]; then

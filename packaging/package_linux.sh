@@ -6,9 +6,9 @@
 # Requires appimagetool. It is downloaded automatically if not on PATH; set
 # APPIMAGETOOL to point at an existing copy to skip the download.
 set -euo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")"
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-./build_linux.sh
+./packaging/build_linux.sh
 
 BUILD="dist/InterAGt"
 if [ ! -d "$BUILD" ]; then
