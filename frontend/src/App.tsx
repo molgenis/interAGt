@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { BarChart3, Download, KeyRound, LineChart, Loader2, X } from 'lucide-react'
+import { BarChart3, KeyRound, LineChart, Loader2, X } from 'lucide-react'
 import {
   useOrganisms,
   useHpoTerms,
@@ -11,7 +11,7 @@ import {
   type ApiRequestError,
   type TrackIssue,
 } from '@/api'
-import { TRACK_EXPLANATIONS, SCORER_EXPLANATIONS } from '@/trackExplanations'
+import { TRACK_EXPLANATIONS, SCORER_EXPLANATIONS, ALL_RESULTS_EXPLANATION } from '@/trackExplanations'
 import { ApiKeyDialog } from '@/ApiKeyDialog'
 import { AboutDialog } from '@/AboutDialog'
 import { FAQDialog } from '@/FAQDialog'
@@ -43,7 +43,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/ui/dialog'
-import { downloadAsCSV, sanitizeVariantForFilename } from '@/DownloadScores'
+import { sanitizeVariantForFilename } from '@/DownloadScores'
 
 const DEFAULT_ORGANISM_VALUE = 'HOMO_SAPIENS'
 const FALLBACK_ORGANISM_LABEL = 'Human (hg38)'
@@ -581,26 +581,13 @@ export default function App() {
                     All results
                   </summary>
                   <div className="mt-4">
-                    {trackExplanations?.scores && (
-                      <p className="mb-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 text-sm">
-                        {trackExplanations.scores}
-                      </p>
-                    )}
-                    <div className="pb-3">
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          const variantName = selectedAlternative || normalizedVariant;
-                          const sanitizedVariant = sanitizeVariantForFilename(variantName);
-                          downloadAsCSV(scoreData.rows, `${sanitizedVariant}_variant_scores`);
-                        }}
-                        >
-                      <Download className="size-4" />
-                      Download results (CSV)
-                    </Button>
-                  </div>
-                    <ScoresTable rows={scoreData.rows} />
+                    <p className="mb-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 text-sm">
+                      {ALL_RESULTS_EXPLANATION}
+                    </p>
+                    <ScoresTable
+                      rows={scoreData.rows}
+                      downloadFileName={`${sanitizeVariantForFilename(selectedAlternative || normalizedVariant)}_variant_scores`}
+                    />
                   </div>
                   
                 </details>

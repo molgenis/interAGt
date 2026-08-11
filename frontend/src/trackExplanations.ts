@@ -1,8 +1,11 @@
 export type TrackExplanations = Record<string, string>
 
+// Shown above the "All results" table in Scores mode. Not part of either
+// map above since it describes the table as a whole, not a per-scorer row.
+export const ALL_RESULTS_EXPLANATION =
+  'Every scored row across your selected scorers, sorted by HPO-gene relevance first and then by quantile_score (see that column\'s tooltip). Only a subset of columns is shown by default; use the Columns button above the table to add more, and hover any header for its definition. Because some columns are hidden by default, rows can look identical here while differing in a column that isn\'t shown (e.g. distinct splice junctions or RNA-seq protocols); the CSV download always includes every column.'
+
 export const TRACK_EXPLANATIONS: TrackExplanations = {
-  scores:
-    'Results from variant scoring, sorted by raw_score and HPO - gene matching. Quantile scores are a standardized, track-specific metric that maps a variant\'s raw predicted impact score to its percentile rank against a genome-wide background set of common human variants.',
   RNA_SEQ:
     'Measures gene expression levels. High scores indicate increased transcription; low scores indicate decreased transcription. Variants here may affect promoter activity, exon inclusion, or mRNA stability.',
   CAGE: 'Cap Analysis Gene Expression: Identifies transcription start sites (TSSs). High scores indicate active promoters. Variants may disrupt promoter motifs or create new TSSs.',
