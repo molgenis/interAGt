@@ -1,15 +1,15 @@
 #!/bin/bash
-# Builds InterAGt.app with PyInstaller (build_script.sh) and wraps it into a
+# Builds InterAGt.app with PyInstaller (build_mac.sh) and wraps it into a
 # distributable .dmg (dist/InterAGt.dmg) with an /Applications symlink for
 # drag-and-drop install.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
-./build_script.sh
+./build_mac.sh
 
 APP="dist/InterAGt.app"
 if [ ! -d "$APP" ]; then
-  echo "error: $APP not found (expected build_script.sh to produce it)" >&2
+  echo "error: $APP not found (expected build_mac.sh to produce it)" >&2
   exit 1
 fi
 

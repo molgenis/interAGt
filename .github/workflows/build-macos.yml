@@ -1,7 +1,7 @@
 name: Build macOS DMG
 
 # PyInstaller cannot cross-compile, so the macOS .app has to be built on a macOS
-# host of the target arch. This runs package_mac.sh (build_script.sh + hdiutil)
+# host of the target arch. This runs package_mac.sh (build_mac.sh + hdiutil)
 # on both an Apple silicon and an Intel runner and uploads one DMG per arch.
 #
 # Runner labels: macos-latest (arm64) and macos-15-intel (x86_64). macos-13,
@@ -38,7 +38,7 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
 
-      # build_script.sh bundles frontend/dist but never builds it. `vite build`
+      # build_mac.sh bundles frontend/dist but never builds it. `vite build`
       # defaults to production mode, so frontend/.env.production supplies
       # VITE_API_BASE_URL=http://localhost:8000/api — the path app_launcher.py
       # mounts the backend under.
@@ -61,7 +61,7 @@ jobs:
           python -m pip install -r backend/requirements.txt
           python -m pip install pyinstaller==6.21.0
 
-      # package_mac.sh runs build_script.sh, then stages InterAGt.app next to an
+      # package_mac.sh runs build_mac.sh, then stages InterAGt.app next to an
       # /Applications symlink and compresses it with hdiutil.
       - name: Build DMG
         run: ./package_mac.sh
