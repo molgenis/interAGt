@@ -610,6 +610,7 @@ export default function App() {
                   outputTypes={scoreData.output_types}
                   explanations={trackExplanations}
                   isDark={isDark}
+                  fileName={`${sanitizeVariantForFilename(selectedAlternative || normalizedVariant)}_variant_scores_summary.html`}
                 />
               </div>
             ) : (

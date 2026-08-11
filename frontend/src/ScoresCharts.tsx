@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Download } from 'lucide-react'
 import { Plot, PLOTLY_CONFIG, plotTheme, themedAxis, themedLayout, themedHoverLabel } from '@/plotly'
 import type { ScoreRow } from '@/api'
 import type { TrackExplanations } from '@/trackExplanations'
@@ -152,6 +153,31 @@ function sharedRange(panels: Panel[]): [number, number] {
   return [Math.min(min, -0.2), Math.max(max, 0.2)]
 }
 
+type Section = {
+  outputType: string
+  spec: ChartSpec
+  panels: Panel[]
+  yRange: [number, number]
+  hasAggregation: boolean
+}
+
+/** Shared by the on-screen charts and the standalone HTML export, so both always agree on
+ * which output types/panels exist. Always includes every panel — search/pagination are
+ * display-only concerns layered on top by the caller. */
+function computeSections(rows: ScoreRow[], outputTypes: string[]): Section[] {
+  return outputTypes
+    .map((outputType) => {
+      const filtered = rows.filter((r) => String(r.output_type) === outputType)
+      if (filtered.length === 0) return null
+      const spec = CHART_SPEC[outputType] ?? DEFAULT_CHART_SPEC
+      const panels = buildPanels(filtered, spec, outputType)
+      const yRange = sharedRange(panels)
+      const hasAggregation = panels.some((p) => p.bars.some((b) => b.n > 1))
+      return { outputType, spec, panels, yRange, hasAggregation }
+    })
+    .filter((s): s is NonNullable<typeof s> => s !== null)
+}
+
 type DisplayMode = 'allBox' | 'allScatter' | 'maxAbs' | 'max' | 'mean'
 
 const MODE_LABEL: Record<Exclude<DisplayMode, 'allBox' | 'allScatter'>, string> = {
@@ -217,129 +243,248 @@ function barPanelLayout(theme: ReturnType<typeof plotTheme>, title: string, x: s
   })
 }
 
-/** Plain per-biosample bar chart: one row per category, no aggregation. */
-function SimpleBarPanel({ title, bars, yRange, isDark, displayMode }: BarPanelProps) {
-  const theme = plotTheme(isDark)
-  const { x, y, colors } = sortedBarData(bars, displayMode)
+type BarPanelFigure = { data: unknown[]; layout: Record<string, unknown> }
 
-  const trace = {
-    type: 'bar',
-    x,
-    y,
-    marker: { color: colors },
-    hovertemplate: '%{x}<br>raw_score=%{y:.4f}<extra></extra>',
+/** Builds the Plotly data/layout for one panel. Picks the trace shape (plain bar / mode-aggregated
+ * bar / box or scatter distribution) the same way for both the on-screen React chart and the
+ * standalone HTML export, so the two never drift apart. */
+function buildBarPanelFigure(
+  theme: ReturnType<typeof plotTheme>,
+  title: string,
+  bars: AggBar[],
+  yRange: [number, number],
+  displayMode?: DisplayMode,
+): BarPanelFigure {
+  const hasSpread = bars.some((b) => b.n > 1)
+
+  // Plain per-biosample bar chart: one row per category, no aggregation.
+  if (!hasSpread) {
+    const { x, y, colors } = sortedBarData(bars, displayMode)
+    const data = [
+      {
+        type: 'bar',
+        x,
+        y,
+        marker: { color: colors },
+        hovertemplate: '%{x}<br>raw_score=%{y:.4f}<extra></extra>',
+      },
+    ]
+    return { data, layout: barPanelLayout(theme, title, x, yRange) }
   }
 
-  return (
-    <Plot
-      data={[trace]}
-      layout={barPanelLayout(theme, title, x, yRange)}
-      config={PLOTLY_CONFIG}
-      style={{ width: '100%' }}
-      useResizeHandler
-    />
-  )
-}
+  const mode = displayMode ?? 'maxAbs'
 
-/** Bar chart where a category aggregates multiple rows: bar height is the selected mode's
- * value (max-abs / max / mean) among the group, sorted by that same value. No whiskers — a
- * single scalar per category doesn't warrant one. */
-function ModeBarPanel({ title, bars, yRange, isDark, displayMode }: BarPanelProps) {
-  const theme = plotTheme(isDark)
-  const mode = (displayMode ?? 'maxAbs') as Exclude<DisplayMode, 'allBox' | 'allScatter'>
-  const { sorted, x, y, colors } = sortedBarData(bars, mode)
+  // Distribution per category: shows every row's raw_score aggregated into that biosample, as
+  // either a boxplot (quartile-based whiskers, not min/max) or a scatter strip.
+  if (mode === 'allBox' || mode === 'allScatter') {
+    const { sorted, x: categories, colors } = sortedBarData(bars, mode)
+    const asScatter = mode === 'allScatter'
+    const data = sorted.flatMap((bar, i): unknown[] =>
+      asScatter
+        ? [
+            {
+              type: 'scatter',
+              mode: 'markers',
+              x: bar.values.map(() => bar.category),
+              y: bar.values,
+              customdata: bar.valueIdentities,
+              marker: { color: colors[i], opacity: 0.5 },
+              showlegend: false,
+              hovertemplate: bar.valueIdentities.some((v) => v)
+                ? '%{x}<br>raw_score=%{y:.4f}<br>%{customdata}<extra></extra>'
+                : '%{x}<br>raw_score=%{y:.4f}<extra></extra>',
+            },
+          ]
+        : [
+            {
+              // Plotly's aggregated box hover (hoveron: 'boxes') never supports
+              // hovertext/hovertemplate — it always labels each stat separately
+              // (see plotly.js src/traces/box/hover.js, hoverOnBoxes: "no hovertemplate
+              // support yet"). Disable it and use an invisible overlay trace below instead.
+              type: 'box',
+              x: bar.values.map(() => bar.category),
+              y: bar.values,
+              marker: { color: colors[i] },
+              line: { color: colors[i] },
+              fillcolor: colors[i],
+              showlegend: false,
+              hoverinfo: 'skip',
+            },
+            {
+              type: 'scatter',
+              mode: 'markers',
+              x: bar.values.map(() => bar.category),
+              y: bar.values,
+              marker: { color: colors[i], opacity: 0 },
+              showlegend: false,
+              hovertemplate: (() => {
+                const s = boxStats(bar.values)
+                const fmt = (v: number) => v.toFixed(4)
+                return `${bar.category}<br>min=${fmt(s.min)}<br>q1=${fmt(s.q1)}<br>median=${fmt(s.median)}<br>q3=${fmt(s.q3)}<br>max=${fmt(s.max)}<extra></extra>`
+              })(),
+            },
+          ],
+    )
+    return { data, layout: barPanelLayout(theme, title, categories, yRange) }
+  }
+
+  // Bar chart where a category aggregates multiple rows: bar height is the selected mode's
+  // value (max-abs / max / mean) among the group, sorted by that same value. No whiskers — a
+  // single scalar per category doesn't warrant one.
+  const scalarMode = mode as Exclude<DisplayMode, 'allBox' | 'allScatter'>
+  const { sorted, x, y, colors } = sortedBarData(bars, scalarMode)
   const customdata = sorted.map((b) => b.n)
+  const data = [
+    {
+      type: 'bar',
+      x,
+      y,
+      marker: { color: colors },
+      customdata,
+      hovertemplate: `%{x}<br>${MODE_LABEL[scalarMode]} raw_score=%{y:.4f}<br>n=%{customdata}<extra></extra>`,
+    },
+  ]
+  return { data, layout: barPanelLayout(theme, title, x, yRange) }
+}
 
-  const trace = {
-    type: 'bar',
-    x,
-    y,
-    marker: { color: colors },
-    customdata,
-    hovertemplate: `%{x}<br>${MODE_LABEL[mode]} raw_score=%{y:.4f}<br>n=%{customdata}<extra></extra>`,
+function BarPanel({ title, bars, yRange, isDark, displayMode }: BarPanelProps) {
+  const theme = plotTheme(isDark)
+  const { data, layout } = buildBarPanelFigure(theme, title, bars, yRange, displayMode)
+
+  return (
+    <Plot
+      data={data}
+      layout={layout}
+      config={PLOTLY_CONFIG}
+      style={{ width: '100%' }}
+      useResizeHandler
+    />
+  )
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
+}
+
+/** Standalone export always uses every panel (ignoring on-screen search/pagination) and the
+ * currently selected display mode per section — mirrors the current in-app view, minus filtering.
+ * Renders light, matching the track export convention (exports never follow dark mode). */
+function renderScoresSummaryHtml(
+  rows: ScoreRow[],
+  outputTypes: string[],
+  explanations: TrackExplanations | undefined,
+  displayModes: Record<string, DisplayMode>,
+): string {
+  const theme = plotTheme(false)
+  const sections = computeSections(rows, outputTypes)
+  const scripts: string[] = []
+  let plotIndex = 0
+
+  const sectionsHtml = sections
+    .map((section) => {
+      const displayMode = displayModes[section.outputType] ?? 'maxAbs'
+      const explanation = explanations?.[section.outputType]
+
+      const panelsHtml = section.panels
+        .map((panel) => {
+          const figure = buildBarPanelFigure(theme, panel.title, panel.bars, section.yRange, displayMode)
+          const id = `plot-${plotIndex++}`
+          scripts.push(
+            `Plotly.newPlot(${JSON.stringify(id)}, ${JSON.stringify(figure.data)}, ${JSON.stringify(figure.layout)}, {displaylogo:false, responsive:true});`,
+          )
+          return `<div class="panel"><div id="${id}" style="width:100%;height:360px;"></div></div>`
+        })
+        .join('\n')
+
+      const body = section.spec.facet ? `<div class="grid">${panelsHtml}</div>` : panelsHtml
+
+      const aggregationHint = section.hasAggregation
+        ? `<p class="hint">${escapeHtml(
+            displayMode === 'allBox' || displayMode === 'allScatter'
+              ? `Some biosamples produce multiple tracks for this output type. Each category shows a ${displayMode === 'allBox' ? 'boxplot' : 'scatter'} of every track's raw_score for that biosample.`
+              : `Some biosamples produce multiple tracks for this output type. Each bar shows the ${MODE_LABEL[displayMode as Exclude<DisplayMode, 'allBox' | 'allScatter'>]} raw_score among them.`,
+          )}</p>`
+        : ''
+
+      return `<section>
+  <h2>${escapeHtml(section.outputType)}</h2>
+  ${explanation ? `<div class="note">${escapeHtml(explanation)}</div>` : ''}
+  ${aggregationHint}
+  ${body}
+</section>`
+    })
+    .join('\n')
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>InterAGt variant scores summary</title>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <style>
+    body{margin:0;padding:24px;font-family:sans-serif;background:#fff;color:#0f172a;}
+    h1{font-size:20px;margin:0 0 8px;}
+    h2{font-size:16px;margin-top:32px;border-bottom:1px solid #e2e8f0;padding-bottom:8px;}
+    .note{background:rgba(37,99,235,0.05);border:1px solid rgba(37,99,235,0.3);border-radius:8px;padding:10px 14px;font-size:13px;margin:10px 0;}
+    .hint{font-size:12px;color:#64748b;margin:8px 0;}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;}
+    .panel{min-width:0;}
+  </style>
+</head>
+<body>
+  <h1>Variant scores summary</h1>
+  ${sectionsHtml}
+  <script>
+    ${scripts.join('\n')}
+  </script>
+</body>
+</html>`
+}
+
+function DownloadSummaryHtmlButton({
+  rows,
+  outputTypes,
+  explanations,
+  displayModes,
+  fileName = 'variant_scores_summary.html',
+}: {
+  rows: ScoreRow[]
+  outputTypes: string[]
+  explanations?: TrackExplanations
+  displayModes: Record<string, DisplayMode>
+  fileName?: string
+}) {
+  const [busy, setBusy] = useState(false)
+
+  function handleDownload() {
+    setBusy(true)
+    try {
+      const html = renderScoresSummaryHtml(rows, outputTypes, explanations, displayModes)
+      const blob = new Blob([html], { type: 'text/html' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = fileName
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
-    <Plot
-      data={[trace]}
-      layout={barPanelLayout(theme, title, x, yRange)}
-      config={PLOTLY_CONFIG}
-      style={{ width: '100%' }}
-      useResizeHandler
-    />
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={handleDownload}
+      disabled={busy || rows.length === 0}
+    >
+      <Download className="size-4" />
+      {busy ? 'Preparing…' : 'Download Plot (HTML)'}
+    </Button>
   )
-}
-
-/** Distribution per category: shows every row's raw_score aggregated into that biosample, as
- * either a boxplot (quartile-based whiskers, not min/max) or a scatter strip. */
-function DistributionPanel({ title, bars, yRange, isDark, displayMode }: BarPanelProps) {
-  const theme = plotTheme(isDark)
-  const { sorted, x: categories, colors } = sortedBarData(bars, displayMode ?? 'allBox')
-  const asScatter = displayMode === 'allScatter'
-
-  const traces = sorted.flatMap((bar, i): unknown[] =>
-    asScatter
-      ? [
-          {
-            type: 'scatter',
-            mode: 'markers',
-            x: bar.values.map(() => bar.category),
-            y: bar.values,
-            customdata: bar.valueIdentities,
-            marker: { color: colors[i], opacity: 0.5 },
-            showlegend: false,
-            hovertemplate: bar.valueIdentities.some((v) => v)
-              ? '%{x}<br>raw_score=%{y:.4f}<br>%{customdata}<extra></extra>'
-              : '%{x}<br>raw_score=%{y:.4f}<extra></extra>',
-          },
-        ]
-      : [
-          {
-            // Plotly's aggregated box hover (hoveron: 'boxes') never supports
-            // hovertext/hovertemplate — it always labels each stat separately
-            // (see plotly.js src/traces/box/hover.js, hoverOnBoxes: "no hovertemplate
-            // support yet"). Disable it and use an invisible overlay trace below instead.
-            type: 'box',
-            x: bar.values.map(() => bar.category),
-            y: bar.values,
-            marker: { color: colors[i] },
-            line: { color: colors[i] },
-            fillcolor: colors[i],
-            showlegend: false,
-            hoverinfo: 'skip',
-          },
-          {
-            type: 'scatter',
-            mode: 'markers',
-            x: bar.values.map(() => bar.category),
-            y: bar.values,
-            marker: { color: colors[i], opacity: 0 },
-            showlegend: false,
-            hovertemplate: (() => {
-              const s = boxStats(bar.values)
-              const fmt = (v: number) => v.toFixed(4)
-              return `${bar.category}<br>min=${fmt(s.min)}<br>q1=${fmt(s.q1)}<br>median=${fmt(s.median)}<br>q3=${fmt(s.q3)}<br>max=${fmt(s.max)}<extra></extra>`
-            })(),
-          },
-        ],
-  )
-
-  return (
-    <Plot
-      data={traces}
-      layout={barPanelLayout(theme, title, categories, yRange)}
-      config={PLOTLY_CONFIG}
-      style={{ width: '100%' }}
-      useResizeHandler
-    />
-  )
-}
-
-function BarPanel(props: BarPanelProps) {
-  const hasSpread = props.bars.some((b) => b.n > 1)
-  if (!hasSpread) return <SimpleBarPanel {...props} />
-  const mode = props.displayMode ?? 'maxAbs'
-  return mode === 'allBox' || mode === 'allScatter' ? <DistributionPanel {...props} /> : <ModeBarPanel {...props} />
 }
 
 export function ScoresSummaryCharts({
@@ -347,34 +492,38 @@ export function ScoresSummaryCharts({
   outputTypes,
   explanations,
   isDark,
+  fileName,
 }: {
   rows: ScoreRow[]
   outputTypes: string[]
   explanations?: TrackExplanations
   isDark: boolean
+  fileName?: string
 }) {
   const [displayModes, setDisplayModes] = useState<Record<string, DisplayMode>>({})
   const [visiblePanelCounts, setVisiblePanelCounts] = useState<Record<string, number>>({})
   const [searchQueries, setSearchQueries] = useState<Record<string, string>>({})
 
   const sections = useMemo(() => {
-    return outputTypes
-      .map((outputType) => {
-        const filtered = rows.filter((r) => String(r.output_type) === outputType)
-        if (filtered.length === 0) return null
-        const spec = CHART_SPEC[outputType] ?? DEFAULT_CHART_SPEC
-        const panels = buildPanels(filtered, spec, outputType)
-        const yRange = sharedRange(panels)
-        const hasAggregation = panels.some((p) => p.bars.some((b) => b.n > 1))
-        const identityLength = (CHART_SPEC[outputType] ?? DEFAULT_CHART_SPEC).identity.length
-        const showModeControl = hasAggregation && identityLength >= 2
-        return { outputType, spec, panels, yRange, hasAggregation, showModeControl }
-      })
-      .filter((s): s is NonNullable<typeof s> => s !== null)
+    return computeSections(rows, outputTypes).map((section) => {
+      const identityLength = (CHART_SPEC[section.outputType] ?? DEFAULT_CHART_SPEC).identity.length
+      const showModeControl = section.hasAggregation && identityLength >= 2
+      return { ...section, showModeControl }
+    })
   }, [rows, outputTypes])
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <DownloadSummaryHtmlButton
+          rows={rows}
+          outputTypes={outputTypes}
+          explanations={explanations}
+          displayModes={displayModes}
+          fileName={fileName}
+        />
+      </div>
+      <div className="space-y-8">
       {sections.map(({ outputType, spec, panels, yRange, hasAggregation, showModeControl }) => {
         const displayMode = displayModes[outputType] ?? 'maxAbs'
         const searchQuery = searchQueries[outputType] || ''
@@ -499,6 +648,7 @@ export function ScoresSummaryCharts({
           </details>
         )
       })}
+      </div>
     </div>
   )
 }

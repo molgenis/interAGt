@@ -721,9 +721,9 @@ def predict_and_build_track_payload(
 
     interval, variant_obj = parse_variant_interval(variant_str, sequence_length)
 
-    # Contact maps use cell-line-scoped ontology (EFO) that does not overlap
-    # the user-selected tissue ontology terms; filtering by ontology_terms
-    # returns zero contact-map tracks. Request contact maps unfiltered.
+    # Contact maps are requested separately so the correct cell-line-scoped
+    # ontology term is applied and shown to the user, rather than falling
+    # back to an unfiltered/arbitrary cell line.
     contact_tracks = [t for t in available_tracks if t == "CONTACT_MAPS"]
     other_tracks = [t for t in available_tracks if t != "CONTACT_MAPS"]
 
@@ -743,7 +743,7 @@ def predict_and_build_track_payload(
                 interval=interval,
                 variant=variant_obj,
                 organism=organism,
-                ontology_terms=ontology_terms, #changed from None, user needs to know what terms have contact maps.
+                ontology_terms=ontology_terms,
                 requested_outputs=[track_map[track][0] for track in contact_tracks],
             )
             if outputs is None:
