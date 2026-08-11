@@ -15,6 +15,27 @@ function toNumber(value: ScoreRow[string]): number {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
+/** Linear-interpolation percentile, matching Plotly's default box-plot quartile method. */
+function quantile(sortedValues: number[], q: number): number {
+  if (sortedValues.length === 1) return sortedValues[0]
+  const pos = (sortedValues.length - 1) * q
+  const base = Math.floor(pos)
+  const rest = pos - base
+  const next = sortedValues[base + 1]
+  return next === undefined ? sortedValues[base] : sortedValues[base] + rest * (next - sortedValues[base])
+}
+
+function boxStats(values: number[]) {
+  const sorted = [...values].sort((a, b) => a - b)
+  return {
+    min: sorted[0],
+    q1: quantile(sorted, 0.25),
+    median: quantile(sorted, 0.5),
+    q3: quantile(sorted, 0.75),
+    max: sorted[sorted.length - 1],
+  }
+}
+
 type ChartSpec = { facet?: string; identity: string[] }
 
 const CHART_SPEC: Record<string, ChartSpec> = {
@@ -43,6 +64,7 @@ type AggBar = {
   n: number
   identity: string
   values: number[]
+  valueIdentities: string[]
 }
 
 function groupBy<T>(rows: T[], keyFn: (row: T) => string): Map<string, T[]> {
@@ -57,6 +79,13 @@ function groupBy<T>(rows: T[], keyFn: (row: T) => string): Map<string, T[]> {
 }
 
 /** One bar per biosample: value is the raw_score of the row with the largest |raw_score|, ties keep the first seen (rows arrive sorted by abs(quantile_score) desc). */
+function rowIdentity(row: ScoreRow, identity: string[]): string {
+  return identity
+    .map((field) => row[field])
+    .filter((v) => v !== null && v !== undefined && v !== '')
+    .join(' / ')
+}
+
 function aggregateByCategory(rows: ScoreRow[], identity: string[]): AggBar[] {
   const groups = groupBy(rows, (row) => String(row.biosample_name ?? ''))
 
@@ -68,9 +97,11 @@ function aggregateByCategory(rows: ScoreRow[], identity: string[]): AggBar[] {
     let max = min
     let sum = 0
     const values: number[] = []
+    const valueIdentities: string[] = []
     for (const row of groupRows) {
       const v = toNumber(row.raw_score)
       values.push(v)
+      valueIdentities.push(rowIdentity(row, identity))
       if (v < min) min = v
       if (v > max) max = v
       sum += v
@@ -80,10 +111,6 @@ function aggregateByCategory(rows: ScoreRow[], identity: string[]): AggBar[] {
         best = row
       }
     }
-    const identityStr = identity
-      .map((field) => best[field])
-      .filter((v) => v !== null && v !== undefined && v !== '')
-      .join(' / ')
     bars.push({
       category,
       value: toNumber(best.raw_score),
@@ -91,8 +118,9 @@ function aggregateByCategory(rows: ScoreRow[], identity: string[]): AggBar[] {
       max,
       mean: sum / groupRows.length,
       n: groupRows.length,
-      identity: identityStr,
+      identity: rowIdentity(best, identity),
       values,
+      valueIdentities,
     })
   }
   return bars
@@ -249,25 +277,51 @@ function DistributionPanel({ title, bars, yRange, isDark, displayMode }: BarPane
   const { sorted, x: categories, colors } = sortedBarData(bars, displayMode ?? 'allBox')
   const asScatter = displayMode === 'allScatter'
 
-  const traces = sorted.map((bar, i) =>
+  const traces = sorted.flatMap((bar, i): unknown[] =>
     asScatter
-      ? {
-          type: 'scatter',
-          mode: 'markers',
-          x: bar.values.map(() => bar.category),
-          y: bar.values,
-          marker: { color: colors[i] },
-          showlegend: false,
-        }
-      : {
-          type: 'box',
-          x: bar.values.map(() => bar.category),
-          y: bar.values,
-          marker: { color: colors[i] },
-          line: { color: colors[i] },
-          fillcolor: colors[i],
-          showlegend: false,
-        },
+      ? [
+          {
+            type: 'scatter',
+            mode: 'markers',
+            x: bar.values.map(() => bar.category),
+            y: bar.values,
+            customdata: bar.valueIdentities,
+            marker: { color: colors[i], opacity: 0.5 },
+            showlegend: false,
+            hovertemplate: bar.valueIdentities.some((v) => v)
+              ? '%{x}<br>raw_score=%{y:.4f}<br>%{customdata}<extra></extra>'
+              : '%{x}<br>raw_score=%{y:.4f}<extra></extra>',
+          },
+        ]
+      : [
+          {
+            // Plotly's aggregated box hover (hoveron: 'boxes') never supports
+            // hovertext/hovertemplate — it always labels each stat separately
+            // (see plotly.js src/traces/box/hover.js, hoverOnBoxes: "no hovertemplate
+            // support yet"). Disable it and use an invisible overlay trace below instead.
+            type: 'box',
+            x: bar.values.map(() => bar.category),
+            y: bar.values,
+            marker: { color: colors[i] },
+            line: { color: colors[i] },
+            fillcolor: colors[i],
+            showlegend: false,
+            hoverinfo: 'skip',
+          },
+          {
+            type: 'scatter',
+            mode: 'markers',
+            x: bar.values.map(() => bar.category),
+            y: bar.values,
+            marker: { color: colors[i], opacity: 0 },
+            showlegend: false,
+            hovertemplate: (() => {
+              const s = boxStats(bar.values)
+              const fmt = (v: number) => v.toFixed(4)
+              return `${bar.category}<br>min=${fmt(s.min)}<br>q1=${fmt(s.q1)}<br>median=${fmt(s.median)}<br>q3=${fmt(s.q3)}<br>max=${fmt(s.max)}<extra></extra>`
+            })(),
+          },
+        ],
   )
 
   return (
