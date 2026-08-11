@@ -3,9 +3,12 @@ import { Plot, PLOTLY_CONFIG, plotTheme, themedAxis, themedLayout, themedHoverLa
 import type { ScoreRow } from '@/api'
 import type { TrackExplanations } from '@/trackExplanations'
 import { Tabs, TabsList, TabsTrigger } from '@/ui/tabs'
+import { Button } from './ui/button'
+import { Input } from '@/ui/input'
 
 const NEGATIVE_COLOR = '#FF0C57'
 const POSITIVE_COLOR = '#017FFD'
+const MAX_PANELS = 6
 
 function toNumber(value: ScoreRow[string]): number {
   const parsed = typeof value === 'number' ? value : Number(value)
@@ -24,7 +27,7 @@ const CHART_SPEC: Record<string, ChartSpec> = {
   CAGE: { facet: 'track_strand', identity: ['track_name'] },
   PROCAP: { facet: 'track_strand', identity: ['track_name'] },
   SPLICE_SITES: { facet: 'track_name', identity: [] },
-  CHIP_TF: { identity: ['transcription_factor', 'genetically_modified'] },
+  CHIP_TF: { facet:'transcription_factor', identity:['genetically_modified'] },
   SPLICE_JUNCTIONS: { identity: ['junction_Start', 'junction_End', 'Assay title'] },
   CONTACT_MAPS: { identity: ['track_name', 'Assay title'] },
 }
@@ -297,6 +300,8 @@ export function ScoresSummaryCharts({
   isDark: boolean
 }) {
   const [displayModes, setDisplayModes] = useState<Record<string, DisplayMode>>({})
+  const [visiblePanelCounts, setVisiblePanelCounts] = useState<Record<string, number>>({})
+  const [searchQueries, setSearchQueries] = useState<Record<string, string>>({})
 
   const sections = useMemo(() => {
     return outputTypes
@@ -318,11 +323,23 @@ export function ScoresSummaryCharts({
     <div className="space-y-8">
       {sections.map(({ outputType, spec, panels, yRange, hasAggregation, showModeControl }) => {
         const displayMode = displayModes[outputType] ?? 'maxAbs'
+        const searchQuery = searchQueries[outputType] || ''
+        const visibleCount = visiblePanelCounts[outputType] || MAX_PANELS
+
+        // Filter panels by search query (case-insensitive)
+        const filteredPanels = spec.facet
+          ? panels.filter(panel =>
+              panel.title.toLowerCase().includes(searchQuery.toLowerCase()))
+          : panels
+
+        const hasMore = spec.facet && filteredPanels.length > visibleCount
+
         return (
           <details key={outputType} className="rounded-lg border p-4" open>
-            <summary className="cursor-pointer text-sm flex items-center justify-between gap-4">
-              <span>{outputType}</span>
-              {showModeControl && (
+          <summary className="cursor-pointer text-sm flex items-center justify-between gap-4">
+            <span>{outputType}</span>
+            {showModeControl && (
+              <div className="details-tabs">
                 <Tabs
                   value={displayMode}
                   onValueChange={(v) => setDisplayModes((prev) => ({ ...prev, [outputType]: v as DisplayMode }))}
@@ -336,8 +353,9 @@ export function ScoresSummaryCharts({
                     <TabsTrigger value="mean">Mean</TabsTrigger>
                   </TabsList>
                 </Tabs>
-              )}
-            </summary>
+              </div>
+            )}
+          </summary>
             <div key={outputType} className="mt-4 space-y-3">
               {explanations?.[outputType] && (
                 <div
@@ -354,25 +372,66 @@ export function ScoresSummaryCharts({
                     : `Some biosamples produce multiple tracks for this output type. Each bar shows the ${MODE_LABEL[displayMode]} raw_score among them, and every individual row is in the table and CSV export above.`}
                 </p>
               )}
-              {spec.facet ? (
-                <div
-                  className="gap-4 w-full"
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(max(250px, calc(100% / 4)), 1fr))',
-                  }}
-                >
-                  {panels.map((panel) => (
-                    <BarPanel
-                      key={panel.title}
-                      title={panel.title}
-                      bars={panel.bars}
-                      yRange={yRange}
-                      isDark={isDark}
-                      displayMode={displayMode}
-                    />
-                  ))}
+
+
+              {['RNA_SEQ', 'CHIP_HISTONE', 'CHIP_TF'].includes(outputType) && (
+                <div className="flex justify-center">
+                  <div className="flex gap-2 w-1/3">
+                  <Input
+                    type="search"
+                    placeholder="Filter"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQueries(prev => ({
+                      ...prev,
+                      [outputType]: e.target.value
+                    }))}
+                    className="flex-1 h-8"
+                  />
                 </div>
+              </div>
+              )}
+
+              {spec.facet ? (
+                <>
+                  {filteredPanels.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No match</p>
+                  ) : (
+                    <>
+                      <div
+                        className="gap-4 w-full"
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: 'repeat(auto-fit, minmax(max(250px, calc(100% / 4)), 1fr))',
+                        }}
+                      >
+                        {filteredPanels.slice(0, visibleCount).map((panel) => (
+                          <BarPanel
+                            key={panel.title}
+                            title={panel.title}
+                            bars={panel.bars}
+                            yRange={yRange}
+                            isDark={isDark}
+                            displayMode={displayMode}
+                          />
+                        ))}
+                      </div>
+                      {hasMore && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setVisiblePanelCounts(prev => ({
+                              ...prev,
+                              [outputType]: Math.min(visibleCount + MAX_PANELS, filteredPanels.length)
+                            }))
+                          }}
+                        >
+                          + Show {Math.min(MAX_PANELS, filteredPanels.length - visibleCount)} more
+                        </Button>
+                      )}
+                    </>
+                  )}
+                </>
               ) : (
                 <BarPanel
                   title={panels[0].title}
