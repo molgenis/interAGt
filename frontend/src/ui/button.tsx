@@ -10,7 +10,7 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "bg-gradient-to-r from-sky-500 via-fuchsia-500 to-pink-500 text-white shadow hover:opacity-90",
+          "rounded-md border-2 border-solid border-transparent [background:linear-gradient(hsl(var(--background)),hsl(var(--background)))_padding-box,linear-gradient(to_right,#0ea5e9,#a855f7,#ec4899)_border-box] shadow hover:opacity-90",
         destructive:
           "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90",
         outline:
