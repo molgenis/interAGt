@@ -74,4 +74,25 @@ export const COLUMN_EXPLANATIONS: TrackExplanations = {
     "raw_score's percentile rank against a genome-wide background of common human variants, computed per scorer and per track. Signed scorers map to [-1, 1] (0 = no change); unsigned scorers map to [0, 1]. Comparable across tracks, unlike raw_score. Default sort key for results.",
   hpo_gene_relevance:
     "App-computed, not from AlphaGenome: 1 if this row's gene is linked to one of your selected HPO terms. Used only to re-sort results (HPO-relevant rows first); it does not filter them.",
+  gene_type: "GENCODE gene biotype, e.g. protein_coding, lncRNA, or miRNA.",
+  gene_strand: "Forward (+) or reverse (-) strand the gene itself is annotated on, independent of track_strand.",
+  variant_scorer:
+    'Full AlphaGenome scorer identifier used to compute this row, e.g. "CenterMaskScorer(requested_output=CAGE, width=501, aggregation_type=DIFF_LOG2_SUM)". Useful for telling apart rows that share an output_type but come from different scorer configurations.',
+  track_name: "Full track identifier from AlphaGenome metadata, combining the ontology CURIE and assay title (e.g. \"CL:0000312 polyA plus RNA-seq\").",
+  'Assay title':
+    'Assay subtype for this track, e.g. "total RNA-seq" vs "polyA plus RNA-seq", or "Histone ChIP-seq" vs "TF ChIP-seq".',
+  ontology_curie:
+    "Ontology term ID for biosample_name, e.g. UBERON (anatomy), CL (cell type), CLO (cell line), EFO (assay/experimental context), or NTR (not yet formally classified).",
+  biosample_type:
+    "Category of biological sample the track was measured in: tissue, primary_cell, cell_line, in_vitro_differentiated_cells, or organoid.",
+  biosample_life_stage: "Developmental stage of the biosample, e.g. adult, embryonic, newborn, or unknown.",
+  data_source: 'Consortium or project that generated this track, e.g. "encode", "gtex", "fantom", or "4dnucleome".',
+  endedness: "Sequencing read protocol for this track: single-end or paired-end.",
+  genetically_modified: "Whether the biosample is genetically modified (e.g. a knockout/knockdown cell line).",
+  gtex_tissue:
+    "GTEx tissue name, populated only for RNA_SEQ tracks sourced from GTEx (data_source = gtex); empty for other tracks.",
+  junction_Start:
+    "Genomic start coordinate of the exon-exon junction this row scores. Populated only for SPLICE_JUNCTIONS rows.",
+  junction_End:
+    "Genomic end coordinate of the exon-exon junction this row scores. Populated only for SPLICE_JUNCTIONS rows.",
 }

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field, replace as dc_replace
 from functools import lru_cache
 from pathlib import Path
@@ -252,10 +253,24 @@ class NormalizedVariantResult:
     actual_ref: str | None = None
 
 
+_UPSTREAM_TRANSPORT_ERROR_RE = re.compile(
+    r"Server Error|Client Error|Connection|Timeout|Max retries exceeded",
+    re.IGNORECASE,
+)
+
+
+def _is_upstream_transport_error(message: str) -> bool:
+    """True if a resolve_variant error came from Ensembl/VariantValidator being
+    unreachable (5xx, timeout, connection failure) rather than a bad variant."""
+    return bool(_UPSTREAM_TRANSPORT_ERROR_RE.search(message))
+
+
 def normalize_variant_str(variant_str: str, organism_label: str) -> NormalizedVariantResult:
     resolution = resolve_variant(variant_str, organism_label)
     # Hard errors still raise; a reference mismatch is flagged for confirmation.
     if resolution.error:
+        if _is_upstream_transport_error(resolution.error):
+            raise UpstreamServiceError(resolution.error)
         raise InvalidVariantError(resolution.error)
     if not resolution.normalized:
         raise InvalidVariantError("Variant normalization returned no result.")

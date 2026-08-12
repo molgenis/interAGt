@@ -58,6 +58,12 @@ function curieFromDisplay(display: string): string {
   return display.slice(open + 1, close)
 }
 
+// Distinguishes an Ensembl/VariantValidator outage (backend code `upstream_failure`)
+// from a genuinely invalid variant, so the UI can point the blame elsewhere.
+function isUpstreamOutage(error: unknown): boolean {
+  return (error as ApiRequestError)?.code === 'upstream_failure'
+}
+
 function ErrorNote({
   title,
   message,
@@ -379,9 +385,18 @@ export default function App() {
                 }}
               />
               {normalizationQuery.isError && (
-                <p className="text-xs text-destructive">
-                  {(normalizationQuery.error as Error).message}
-                </p>
+                isUpstreamOutage(normalizationQuery.error) ? (
+                  <p className="text-xs text-amber-600 dark:text-amber-500">
+                    Ensembl/VariantValidator looks temporarily unavailable -
+                    that's an outage on their end, not this app. Wait and
+                    retry, or switch to chr:pos:ref:alt format (e.g.
+                    chr1:12345:A:T), which doesn't need that lookup.
+                  </p>
+                ) : (
+                  <p className="text-xs text-destructive">
+                    {(normalizationQuery.error as Error).message}
+                  </p>
+                )
               )}
               {needsConfirmation && confirmation ? (
                 <p className="text-xs text-amber-600 dark:text-amber-500">

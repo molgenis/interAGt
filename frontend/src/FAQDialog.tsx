@@ -46,6 +46,14 @@ const FAQ_ITEMS = [
       "Picking one won't filter or suggest the other; set each independently if you want both applied.",
     ],
   },
+  {
+    question:
+      'I got an "Ensembl API error" or "VariantValidator error" (503, timeout) - is the app broken?',
+    answer: [
+      "No. rsID and HGVS variant input are resolved by calling Ensembl's REST API (and VariantValidator for HGVS), both third-party services outside this app's control. A 503, \"Service Unavailable\", or timeout means their service is down or overloaded, not this app.",
+      'Two options: wait a bit and retry, or switch to chr:pos:ref:alt notation (e.g. chr1:12345:A:T) - that format skips the external lookup entirely, so it keeps working during an Ensembl/VariantValidator outage.',
+    ],
+  },
 ]
 
 export function FAQDialog() {
