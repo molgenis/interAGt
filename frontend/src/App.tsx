@@ -231,13 +231,15 @@ export default function App() {
     Boolean(apiKey) &&
     Boolean(normalizedVariant) &&
     selectedScorers.length > 0 &&
-    !scoreMutation.isPending
+    !scoreMutation.isPending &&
+    !normalizationQuery.isValidating
   const canVisualize =
     Boolean(apiKey) &&
     Boolean(normalizedVariant) &&
     selectedTissues.length > 0 &&
     selectedTracks.length > 0 &&
-    !trackPlotMutation.isPending
+    !trackPlotMutation.isPending &&
+    !normalizationQuery.isValidating
 
   function runScore() {
     scoreMutation.mutate({
@@ -562,19 +564,27 @@ export default function App() {
             {mode === 'scores' ? (
               <>
                 <Button onClick={handleScore} disabled={!canScore}>
-                  {scoreMutation.isPending && (
+                  {(scoreMutation.isPending || normalizationQuery.isValidating) && (
                     <Loader2 className="size-4 animate-spin" />
                   )}
-                  {scoreMutation.isPending ? 'Scoring…' : 'Get variant scores'}
+                  {scoreMutation.isPending
+                    ? 'Scoring…'
+                    : normalizationQuery.isValidating
+                      ? 'Validating variant…'
+                      : 'Get variant scores'}
                 </Button>
               </>
             ) : (
               <>
                 <Button onClick={handleVisualize} disabled={!canVisualize}>
-                  {trackPlotMutation.isPending && (
+                  {(trackPlotMutation.isPending || normalizationQuery.isValidating) && (
                     <Loader2 className="size-4 animate-spin" />
                   )}
-                  {trackPlotMutation.isPending ? 'Running model…' : 'Visualize'}
+                  {trackPlotMutation.isPending
+                    ? 'Running model…'
+                    : normalizationQuery.isValidating
+                      ? 'Validating variant…'
+                      : 'Visualize'}
                 </Button>
               </>
             )}

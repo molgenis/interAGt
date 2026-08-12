@@ -1,4 +1,15 @@
+import { useEffect, useState } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
+
+// Delays a value's update so dependent effects (e.g. queries) don't refire on every keystroke.
+function useDebouncedValue<T>(value: T, delayMs: number): T {
+  const [debounced, setDebounced] = useState(value)
+  useEffect(() => {
+    const id = setTimeout(() => setDebounced(value), delayMs)
+    return () => clearTimeout(id)
+  }, [value, delayMs])
+  return debounced
+}
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -283,13 +294,18 @@ export function useVariantNormalization(
   organismLabel: string,
 ) {
   const trimmed = variant.trim()
-  return useQuery({
-    queryKey: ['normalize', trimmed, organismLabel],
-    queryFn: () => api.postNormalize(trimmed, organismLabel),
-    enabled: trimmed.length > 0 && organismLabel.length > 0,
+  const debounced = useDebouncedValue(trimmed, 350)
+  const query = useQuery({
+    queryKey: ['normalize', debounced, organismLabel],
+    queryFn: () => api.postNormalize(debounced, organismLabel),
+    enabled: debounced.length > 0 && organismLabel.length > 0,
     retry: false,
     staleTime: 5 * 60 * 1000,
   })
+  // True while waiting out the debounce or while the request itself is in flight -
+  // covers the whole window during which `normalized` may be stale.
+  const isValidating = trimmed !== debounced || query.isFetching
+  return { ...query, isValidating }
 }
 
 export function useVariantScores() {
