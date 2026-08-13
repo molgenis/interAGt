@@ -618,19 +618,37 @@ export function ScoresSummaryCharts({
                           />
                         ))}
                       </div>
-                      {hasMore && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setVisiblePanelCounts(prev => ({
-                              ...prev,
-                              [outputType]: Math.min(visibleCount + MAX_PANELS, filteredPanels.length)
-                            }))
-                          }}
-                        >
-                          + Show {Math.min(MAX_PANELS, filteredPanels.length - visibleCount)} more
-                        </Button>
+                      {filteredPanels.length > MAX_PANELS && (
+                        <div className="flex gap-2">
+                          {visibleCount > MAX_PANELS && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setVisiblePanelCounts(prev => ({
+                                  ...prev,
+                                  [outputType]: MAX_PANELS
+                                }))
+                              }}
+                            >
+                            - Show less
+                            </Button>
+                          )}
+                          {hasMore && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setVisiblePanelCounts(prev => ({
+                                  ...prev,
+                                  [outputType]: Math.min(visibleCount + MAX_PANELS, filteredPanels.length)
+                                }))
+                              }}
+                            >
+                              + Show {Math.min(MAX_PANELS, filteredPanels.length - visibleCount)} more
+                            </Button>
+                          )}
+                        </div>
                       )}
                     </>
                   )}

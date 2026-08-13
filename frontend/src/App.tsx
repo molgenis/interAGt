@@ -295,7 +295,7 @@ export default function App() {
   return (
     <div className="flex h-full flex-col">
       <header className="flex shrink-0 items-center gap-4 border-b px-4 py-3">
-        <img src="/logo_interAGt.svg" alt="interAGt" className="h-12" />
+        <img src="/logo_interAGt.svg" alt="interAGt" className="h-14" />
         <span className="hidden text-sm text-muted-foreground lg:inline">
           An intuitive interface to AlphaGenome
         </span>
