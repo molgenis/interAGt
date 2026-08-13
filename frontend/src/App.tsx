@@ -209,7 +209,9 @@ export default function App() {
     if (trackPlotMutation.data) setWarningsDismissed(false)
   }, [trackPlotMutation.data])
 
-  const normalization = normalizationQuery.data
+  const normalization = normalizationQuery.isValidating
+    ? undefined
+    : normalizationQuery.data
   const alternatives = normalization?.alternatives ?? []
   const normalizedVariant = selectedAlternative ?? normalization?.normalized ?? ''
   const needsConfirmation = Boolean(normalization?.needs_confirmation)

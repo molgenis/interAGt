@@ -10,7 +10,7 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "rounded-md border-2 border-solid border-transparent [background:linear-gradient(hsl(var(--background)),hsl(var(--background)))_padding-box,linear-gradient(to_right,#0ea5e9,#a855f7,#ec4899)_border-box] shadow hover:opacity-90",
+          "rounded-md border-2 border-solid border-transparent [background:linear-gradient(hsl(var(--background)),hsl(var(--background)))_padding-box,linear-gradient(to_right,#0ea5e9,#a855f7,#ec4899)_border-box] shadow hover:opacity-80",
         destructive:
           "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90",
         outline:
