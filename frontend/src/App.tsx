@@ -8,6 +8,8 @@ import {
   useTracks,
   useVariantScores,
   useTrackPlot,
+  loadApiKey,
+  saveApiKey as persistApiKey,
   type ApiRequestError,
   type TrackIssue,
 } from '@/api'
@@ -47,7 +49,6 @@ import { sanitizeVariantForFilename } from '@/DownloadScores'
 
 const DEFAULT_ORGANISM_VALUE = 'HOMO_SAPIENS'
 const FALLBACK_ORGANISM_LABEL = 'Human (hg38)'
-const API_KEY_STORAGE = 'interagt-api-key'
 
 type Mode = 'scores' | 'tracks'
 
@@ -154,9 +155,7 @@ function EmptyState({
 export default function App() {
   const { theme, setTheme, isDark } = useTheme()
 
-  const [apiKey, setApiKey] = useState(
-    () => localStorage.getItem(API_KEY_STORAGE) ?? '',
-  )
+  const [apiKey, setApiKey] = useState('')
   const [mode, setMode] = useState<Mode>('scores')
   const [organismValue, setOrganismValue] = useState(DEFAULT_ORGANISM_VALUE)
   const [variantInput, setVariantInput] = useState('')
@@ -185,10 +184,20 @@ export default function App() {
   const scoreMutation = useVariantScores()
   const trackPlotMutation = useTrackPlot()
 
-  function saveApiKey(key: string) {
-    localStorage.setItem(API_KEY_STORAGE, key)
+  function handleSaveApiKey(key: string) {
     setApiKey(key)
+    void persistApiKey(key)
   }
+
+  useEffect(() => {
+    let cancelled = false
+    loadApiKey().then((key) => {
+      if (!cancelled) setApiKey(key)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     if (currentOrganism) {
@@ -305,7 +314,7 @@ export default function App() {
           <AboutDialog />
           <FAQDialog />
           <ThemeToggle theme={theme} setTheme={setTheme} />
-          <ApiKeyDialog apiKey={apiKey} onSave={saveApiKey} />
+          <ApiKeyDialog apiKey={apiKey} onSave={handleSaveApiKey} />
         </div>
       </header>
 

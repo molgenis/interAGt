@@ -19,8 +19,10 @@ PYTHON="$(command -v python || command -v python3)"
   --collect-all uvicorn \
   --collect-all fastapi \
   --collect-all pywebview \
+  --collect-all keyring \
   --add-data "backend:backend" \
   --add-data "helper_functions.py:."\
+  --add-data "launcher_keystore.py:."\
   --add-data "app_launcher.py:."\
   --add-data "resources:resources" \
   --add-data "frontend/dist:frontend/dist" \

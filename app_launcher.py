@@ -9,6 +9,7 @@ from pathlib import Path
 
 import webview
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 parser = argparse.ArgumentParser(description="AGInterpret app launcher")
@@ -17,10 +18,34 @@ parser.add_argument('--build', action='store_true', help='Build frontend, overwr
 args = parser.parse_args()
 
 # Import your backend app
+from backend.core import get_cors_origins
 from backend.main import app as backend_app
+from launcher_keystore import keystore_router
 
 # Create the main app
 app = FastAPI()
+
+# --dev mode serves the frontend on :4173 (bun run preview) against this
+# app on :8000 - genuinely cross-origin, unlike production mode where both
+# are :8000. backend_app carries its own CORSMiddleware for routes under
+# /api, but that doesn't cover routes registered directly on this top-level
+# app, so the keystore router below needs the same origins allowed here too.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=get_cors_origins(),
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Keychain-backed API key storage. Lives on this top-level app (not on
+# backend_app) so bare `uvicorn backend.main:app` never touches the OS
+# keychain - the frontend's /api/keystore/api-key request 404s there and
+# falls back to localStorage. Must be registered before the /api mount
+# below: Starlette matches routes in registration order, and a Mount("/api")
+# would otherwise greedily swallow every /api/* path, including this one,
+# before it ever reaches these literal routes.
+app.include_router(keystore_router, prefix="/api/keystore", tags=["keystore"])
 
 # Mount backend under /api
 app.mount("/api", backend_app)

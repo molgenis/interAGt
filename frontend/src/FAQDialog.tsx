@@ -20,7 +20,7 @@ const FAQ_ITEMS = [
   {
     question: 'Where does my API key go, and is it safe to enter?',
     answer: [
-      "Your key is stored only in your browser, never in a database or on disk on the server. It's sent along with each prediction request to authenticate you with AlphaGenome, and it's never logged or shared.",
+      "Your key is stored securely on your own device, never in a database or on disk on the server: in the desktop app it's kept in your OS keychain (Keychain on macOS, Credential Manager on Windows, Secret Service on Linux), and in a browser tab it's kept in that browser. It's sent along with each prediction request to authenticate you with AlphaGenome, and it's never logged or shared.",
       'You can change or clear it any time from the key icon in the header.',
     ],
   },

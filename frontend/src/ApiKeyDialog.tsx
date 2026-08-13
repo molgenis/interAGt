@@ -61,7 +61,9 @@ export function ApiKeyDialog({
             >
               Google DeepMind
             </a>
-            . It is stored in this browser and sent only to your backend.
+            . It is stored securely on this device (the OS keychain in the
+            desktop app, this browser otherwise) and sent only to your
+            backend.
           </DialogDescription>
         </DialogHeader>
 

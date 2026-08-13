@@ -220,6 +220,12 @@ function post<T>(path: string, payload: unknown): Promise<T> {
   return request<T>(path, { method: 'POST', body: JSON.stringify(payload) })
 }
 
+const LOCAL_API_KEY_STORAGE = 'interagt-api-key'
+
+interface StoredApiKeyResponse {
+  api_key: string | null
+}
+
 const api = {
   getOrganisms: () => request<OrganismsResponse>('/metadata/organisms'),
   getHpoTerms: () => request<HpoTermsResponse>('/metadata/hpo-terms'),
@@ -248,6 +254,33 @@ const api = {
     ontology_terms: string[]
     tracks: string[]
   }) => post<TrackPlotResponse>('/plots/tracks', payload),
+  getStoredApiKey: () => request<StoredApiKeyResponse>('/keystore/api-key'),
+  setStoredApiKey: (apiKey: string) =>
+    post<StoredApiKeyResponse>('/keystore/api-key', { api_key: apiKey }),
+}
+
+// ── API key persistence ─────────────────────────────────────────────────────
+//
+// Packaged (pywebview) builds route through app_launcher.py's OS-keychain
+// endpoints. Plain `bun run dev` browser tabs (no app_launcher backend) get
+// a 404 from that route and fall back to localStorage, matching the old
+// browser-tab behavior.
+
+export async function loadApiKey(): Promise<string> {
+  try {
+    const res = await api.getStoredApiKey()
+    return res.api_key ?? ''
+  } catch {
+    return localStorage.getItem(LOCAL_API_KEY_STORAGE) ?? ''
+  }
+}
+
+export async function saveApiKey(key: string): Promise<void> {
+  try {
+    await api.setStoredApiKey(key)
+  } catch {
+    localStorage.setItem(LOCAL_API_KEY_STORAGE, key)
+  }
 }
 
 // ── Hooks ────────────────────────────────────────────────────────────────────
