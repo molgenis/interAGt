@@ -12,6 +12,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+webview.settings['ALLOW_DOWNLOADS'] = True
+
 parser = argparse.ArgumentParser(description="AGInterpret app launcher")
 parser.add_argument('--dev', action='store_true', help='Run with frontend dev server (Bun)')
 parser.add_argument('--build', action='store_true', help='Build frontend, overwrite existing dist')
