@@ -235,6 +235,10 @@ export default function App() {
     if (trackPlotMutation.data) setWarningsDismissed(false)
   }, [trackPlotMutation.data])
 
+  useEffect(() => {
+    setSelectedTissues([]);
+  }, [organismValue]);
+
   const normalization = normalizationQuery.isValidating
     ? undefined
     : normalizationQuery.data
