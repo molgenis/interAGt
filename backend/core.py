@@ -111,33 +111,58 @@ def get_log_file_path() -> Path:
 
 def configure_logging() -> Path:
     log_file = get_log_file_path()
-    log_file.parent.mkdir(parents=True, exist_ok=True)
-    logging.config.dictConfig(
-        {
-            "version": 1,
-            "disable_existing_loggers": False,
-            "formatters": {
-                "standard": {
-                    "format": "%(asctime)s %(levelname)s %(name)s %(message)s",
+    try:
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+        logging.config.dictConfig(
+            {
+                "version": 1,
+                "disable_existing_loggers": False,
+                "formatters": {
+                    "standard": {
+                        "format": "%(asctime)s %(levelname)s %(name)s %(message)s",
+                    },
                 },
-            },
-            "handlers": {
-                "console": {
-                    "class": "logging.StreamHandler",
-                    "formatter": "standard",
+                "handlers": {
+                    "console": {
+                        "class": "logging.StreamHandler",
+                        "formatter": "standard",
+                        "level": get_log_level(),
+                    },
+                    "file": {
+                        "class": "logging.FileHandler",
+                        "formatter": "standard",
+                        "filename": str(log_file),
+                        "level": get_log_level(),
+                    },
+                },
+                "root": {
+                    "handlers": ["console", "file"],
                     "level": get_log_level(),
                 },
-                "file": {
-                    "class": "logging.FileHandler",
-                    "formatter": "standard",
-                    "filename": str(log_file),
+            }
+        )
+    except (PermissionError, OSError) as e:
+        # Warning?
+        logging.config.dictConfig(
+            {
+                "version": 1,
+                "disable_existing_loggers": False,
+                "formatters": {
+                    "standard": {
+                        "format": "%(asctime)s %(levelname)s %(name)s %(message)s",
+                    },
+                },
+                "handlers": {
+                    "console": {
+                        "class": "logging.StreamHandler",
+                        "formatter": "standard",
+                        "level": get_log_level(),
+                    },
+                },
+                "root": {
+                    "handlers": ["console"],
                     "level": get_log_level(),
                 },
-            },
-            "root": {
-                "handlers": ["console", "file"],
-                "level": get_log_level(),
-            },
-        }
-    )
+            }
+        )
     return log_file
