@@ -38,6 +38,14 @@ const FAQ_ITEMS = [
     ],
   },
   {
+    question: 'Why do mouse gene models look shifted from the signal in track plots?',
+    answer: [
+      "AlphaGenome serves its mouse annotation file under an \"mm10\" path and label, but its actual coordinates are GRCm39/mm39, not GRCm38/mm10. That's a mismatch in AlphaGenome's own file, not something introduced by this app.",
+      "AlphaGenome's mouse track and variant data are still genuinely mm10-based and unaffected - only the gene/transcript annotation overlay is shifted. So predictions and scores are fine; it's the drawn gene models (exon/intron boundaries, transcript start/end) in track plots that can appear offset from the real signal, sometimes by enough to misalign a gene's annotation with its own peak.",
+      "There's no official fix from AlphaGenome yet. Advanced users can work around it manually, outside this app: download the correctly mm10-coordinated GTF straight from GENCODE's own mirror (ftp.ebi.ac.uk, release M23, gencode.vM23.annotation.gtf.gz), filter it to protein-coding/TSL-1 transcripts, convert it to the feather format this app's transcript extractor reads, and drop it in to replace the file normally loaded from resources/ or AlphaGenome's cloud fallback. This app does not do this automatically - it still uses AlphaGenome's served (mismatched) file by default.",
+    ],
+  },
+  {
     question: 'Do HPO phenotype terms and UBERON/CL/CLO/EFO tissue terms interact?',
     answer: [
       "No, they're independent and don't reference each other.",

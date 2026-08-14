@@ -103,6 +103,13 @@ export function AboutDialog() {
                 for single-variant, single-interval predictions, not
                 complex-trait or polygenic interpretation.
               </li>
+              <li>
+                Mouse gene/transcript annotations in track plots can render
+                offset from the actual signal - AlphaGenome's served "mm10"
+                annotation file is actually mm39-coordinated. Track and
+                variant predictions themselves are unaffected. See the FAQ
+                for detail.
+              </li>
             </ul>
           </section>
 

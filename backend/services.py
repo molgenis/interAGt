@@ -36,8 +36,15 @@ ORGANISM_MAP = {
 }
 
 ORGANISM_EXAMPLE_VARIANTS = {
-    "Human (hg38)": "chr5:1295113:G:A",
-    "Mouse (mm10)": "chr13:73626861:C:G",
+    # Chosen to produce nonzero rows for every scorer in SCORER_SELECTION_CHOICES
+    # (incl. splice/polyadenylation, which need a variant inside an actively
+    # spliced, well-expressed gene) and nonzero tracks for common ontology
+    # terms. Human: intronic APOL4 (chr22), used as the known-issues.md
+    # scorer-coverage repro. Mouse: Actb (chr5), a housekeeping gene with no
+    # human-only-scorer gaps to worry about. Verified against the live
+    # AlphaGenome API — see backend/services.py git history for the check.
+    "Human (hg38)": "chr22:36201698:A:C",
+    "Mouse (mm10)": "chr5:142889961:G:A",
 }
 
 SCORER_SELECTION_CHOICES = [

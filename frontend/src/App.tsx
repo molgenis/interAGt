@@ -130,6 +130,23 @@ function WarningsNote({
   )
 }
 
+function MouseAnnotationWarning() {
+  return (
+    <div
+      role="alert"
+      className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-500"
+    >
+      <div className="font-medium">Mouse gene annotations may be misaligned</div>
+      <p className="mt-0.5 text-xs">
+        AlphaGenome's served mouse annotation file is coordinate-mismatched
+        (mm39 coordinates under an mm10 label), so transcript/gene models can
+        render offset from the actual signal in this track. AlphaGenome's
+        track and variant data are unaffected. See the FAQ for detail.
+      </p>
+    </div>
+  )
+}
+
 function EmptyState({
   icon,
   title,
@@ -661,6 +678,7 @@ export default function App() {
             />
           ) : trackPayload ? (
             <div className="space-y-4">
+              {!isHuman && <MouseAnnotationWarning />}
               {!warningsDismissed && trackPayload.warnings.length > 0 && (
                 <WarningsNote
                   warnings={trackPayload.warnings}
