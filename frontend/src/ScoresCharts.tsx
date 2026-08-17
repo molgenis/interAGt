@@ -356,7 +356,10 @@ function BarPanel({ title, bars, yRange, isDark, displayMode }: BarPanelProps) {
       data={data}
       layout={layout}
       config={PLOTLY_CONFIG}
-      style={{ width: '100%' }}
+      style={{
+        width: '100%',
+        height: '360px',
+      }}
       useResizeHandler
     />
   )
