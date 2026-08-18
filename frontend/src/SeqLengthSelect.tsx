@@ -1,7 +1,7 @@
 import { Tabs, TabsList, TabsTrigger } from '@/ui/tabs'
 
 // Keep in sync with SEQUENCE_LENGTHS in backend/schemas.py.
-export const SEQUENCE_LENGTHS = [16384, 131072, 524288, 1048576] as const
+const SEQUENCE_LENGTHS = [16384, 131072, 524288, 1048576] as const
 
 export type SequenceLength = (typeof SEQUENCE_LENGTHS)[number]
 

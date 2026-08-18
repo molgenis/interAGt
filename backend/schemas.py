@@ -32,8 +32,13 @@ class OrganismsResponse(BaseModel):
     organisms: list[OrganismItem]
 
 
+class HpoTermItem(BaseModel):
+    term: str
+    definition: str = ""
+
+
 class HpoTermsResponse(BaseModel):
-    terms: list[str]
+    terms: list[HpoTermItem]
 
 
 class OntologyTermsRequest(BaseModel):
@@ -129,3 +134,5 @@ class TracksPlotResponse(BaseModel):
     variant: dict[str, Any]
     tracks: list[dict[str, Any]]
     transcripts: list[dict[str, Any]]
+    warnings: list[dict[str, Any]] = Field(default_factory=list)
+    transcript_warning: str | None = None

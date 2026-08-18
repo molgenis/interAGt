@@ -65,3 +65,13 @@
     height: 100%;
   }
 }
+
+/* hide tabs */
+details:not([open]) summary .details-tabs {
+  display: none;
+}
+@media screen and (max-width: 1000px){
+  summary .details-tabs {
+    display: none;
+  }
+}

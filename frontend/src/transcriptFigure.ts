@@ -3,9 +3,12 @@ import type { PlotTheme } from '@/plotly'
 
 const EXON_HEIGHT = 0.15
 const CDS_HEIGHT = 0.35
-const TRACK_SPACING = 1.0
+// Lane pitch: with no on-plot labels, only needs to clear a CDS box plus a small gap.
+const TRACK_SPACING = 0.7
+// Vertical breathing room above the top lane / below the bottom lane.
+const TRACK_PAD = CDS_HEIGHT / 2 + 0.15
 
-export { CDS_HEIGHT, TRACK_SPACING }
+export { CDS_HEIGHT, TRACK_SPACING, TRACK_PAD }
 
 export interface TranscriptResult {
   traces: unknown[]
@@ -47,6 +50,34 @@ function assignLanes(transcripts: TranscriptSpec[]): Map<TranscriptSpec, number>
   return result
 }
 
+function txStart(tx: TranscriptSpec): number {
+  let start = Infinity
+  for (const exon of tx.exons) if (exon.start < start) start = exon.start
+  return start
+}
+
+/**
+ * Position of each transcript within its lane (0, 1, 2, ...), ordered by start position.
+ * Colors cycle on this index so transcripts sharing a lane — the ones a viewer could actually
+ * confuse, since they sit at the same y — always land on different hues.
+ */
+function laneIndex(transcripts: TranscriptSpec[], laneMap: Map<TranscriptSpec, number>): Map<TranscriptSpec, number> {
+  const sorted = [...transcripts].sort((a, b) => {
+    const la = laneMap.get(a) ?? 0
+    const lb = laneMap.get(b) ?? 0
+    return la !== lb ? la - lb : txStart(a) - txStart(b)
+  })
+  const result = new Map<TranscriptSpec, number>()
+  const counters = new Map<number, number>()
+  for (const tx of sorted) {
+    const lane = laneMap.get(tx) ?? 0
+    const idx = counters.get(lane) ?? 0
+    result.set(tx, idx)
+    counters.set(lane, idx + 1)
+  }
+  return result
+}
+
 export function buildTranscriptObjects(
   transcripts: TranscriptSpec[],
   xRef: string,
@@ -57,26 +88,42 @@ export function buildTranscriptObjects(
   const shapes: unknown[] = []
   const annotations: unknown[] = []
   const laneMap = assignLanes(transcripts)
-  const TX_COLOR = theme.fg
+  const laneIndexMap = laneIndex(transcripts, laneMap)
 
-  for (const tx of transcripts) {
+  // Ordered by lane then position within the lane, so color assignment is deterministic.
+  const orderedTranscripts = [...transcripts].sort((a, b) => {
+    const la = laneMap.get(a) ?? 0
+    const lb = laneMap.get(b) ?? 0
+    return la !== lb ? la - lb : (laneIndexMap.get(a) ?? 0) - (laneIndexMap.get(b) ?? 0)
+  })
+
+  for (const tx of orderedTranscripts) {
     const lane = laneMap.get(tx) ?? 0
     const y = -lane * TRACK_SPACING
     const sortedExons = [...tx.exons].sort((a, b) => a.start - b.start)
     if (!sortedExons.length) continue
 
-    const txStart = sortedExons[0].start
+    const TX_COLOR = theme.categorical[(laneIndexMap.get(tx) ?? 0) % theme.categorical.length]
 
-    // Transcript label
-    annotations.push({
-      x: txStart,
-      y: y + CDS_HEIGHT + 0.15,
-      text: tx.transcript_id,
-      showarrow: false,
-      xanchor: 'left',
-      font: { size: 11, color: theme.fg },
-      xref: xRef,
-      yref: yRef,
+    // Invisible full-span hover target: shows the transcript_id on hover, no on-plot label.
+    const spanStart = sortedExons[0].start
+    const spanEnd = sortedExons[sortedExons.length - 1].end
+    const step = Math.max(50, Math.floor((spanEnd - spanStart) / 200))
+    const hoverX: number[] = []
+    for (let x = spanStart; x < spanEnd; x += step) hoverX.push(x)
+    hoverX.push(spanEnd)
+    traces.push({
+      type: 'scatter',
+      mode: 'lines',
+      x: hoverX,
+      y: hoverX.map(() => y),
+      // Real color (not transparent) so the unified-hover swatch matches the transcript;
+      // it renders on the lane's centerline, hidden under the exon/intron shapes drawn above it.
+      line: { color: TX_COLOR, width: 1 },
+      hovertemplate: `${tx.transcript_id}<extra></extra>`,
+      showlegend: false,
+      xaxis: xRef,
+      yaxis: yRef,
     })
 
     // Intron connectors as shapes + strand arrows as trace

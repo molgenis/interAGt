@@ -1,0 +1,71 @@
+name: Build Windows installer
+
+# PyInstaller cannot cross-compile, so the Windows installer has to be built on
+# a Windows host. This runs packaging/package_win.ps1 (packaging/build_win.ps1
+# + Inno Setup) on a windows-latest runner and uploads dist/InterAGt-Setup.exe.
+on:
+  # Manual only, plus release publishes below — no push trigger. This repo is
+  # private, so Windows minutes bill at 2x; do not re-add a push trigger
+  # without discussing cost first.
+  workflow_dispatch:
+  # Publishing a GitHub release attaches the installer to it.
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: oven-sh/setup-bun@v2
+
+      # build_win.ps1 bundles frontend/dist but never builds it. `vite build`
+      # defaults to production mode, so frontend/.env.production supplies
+      # VITE_API_BASE_URL=http://localhost:8000/api — the path app_launcher.py
+      # mounts the backend under.
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          bun install --frozen-lockfile
+          bun run build
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      # pywebview declares pythonnet on win32, which pulls in clr_loader; both
+      # are --collect-all'd by build_win.ps1 for the EdgeChromium backend.
+      # PyInstaller is build-only, so it is pinned here rather than added to
+      # backend/requirements.txt.
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/requirements.txt
+          python -m pip install pyinstaller==6.21.0
+
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      # packaging/package_win.ps1 runs packaging/build_win.ps1, then locates
+      # ISCC.exe (chocolatey installs it to the "Program Files (x86)\Inno
+      # Setup 6" path it falls back to) and compiles packaging/installer_win.iss.
+      - name: Build installer
+        run: .\packaging\package_win.ps1
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: InterAGt-Setup
+          path: dist/InterAGt-Setup.exe
+          if-no-files-found: error
+
+      - name: Attach installer to release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$env:TAG" dist\InterAGt-Setup.exe --clobber

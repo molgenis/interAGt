@@ -1,4 +1,15 @@
+import { useEffect, useState } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
+
+// Delays a value's update so dependent effects (e.g. queries) don't refire on every keystroke.
+function useDebouncedValue<T>(value: T, delayMs: number): T {
+  const [debounced, setDebounced] = useState(value)
+  useEffect(() => {
+    const id = setTimeout(() => setDebounced(value), delayMs)
+    return () => clearTimeout(id)
+  }, [value, delayMs])
+  return debounced
+}
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -12,11 +23,14 @@ export interface OrganismsResponse {
   organisms: OrganismItem[]
 }
 
-export interface HpoTermsResponse {
-  terms: string[]
+export interface HpoTermItem {
+  term: string
+  definition: string
 }
 
-export type TrackExplanations = Record<string, string>
+export interface HpoTermsResponse {
+  terms: HpoTermItem[]
+}
 
 export interface OntologyTermsResponse {
   curie_to_label: Record<string, string>
@@ -127,18 +141,26 @@ export interface TrackVariantInfo {
   label: string
 }
 
+export interface TrackIssue {
+  track: string
+  reason_code: string
+  message: string
+}
+
 export interface TrackPlotResponse {
   interval: TrackIntervalInfo
   variant: TrackVariantInfo
   tracks: TrackSpec[]
   transcripts: TranscriptSpec[]
+  warnings: TrackIssue[]
+  transcript_warning: string | null
 }
 
 interface ApiErrorBody {
   error: {
     code: string
     message: string
-    details?: unknown
+    details?: TrackIssue[]
   }
 }
 
@@ -150,10 +172,12 @@ const API_BASE_URL: string =
 
 export class ApiRequestError extends Error {
   code: string
-  constructor(message: string, code = 'error') {
+  details?: TrackIssue[]
+  constructor(message: string, code = 'error', details?: TrackIssue[]) {
     super(message)
     this.name = 'ApiRequestError'
     this.code = code
+    this.details = details
   }
 }
 
@@ -186,6 +210,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ApiRequestError(
       errorBody?.error?.message ?? `Request failed (${response.status})`,
       errorBody?.error?.code ?? 'error',
+      errorBody?.error?.details,
     )
   }
 
@@ -196,20 +221,24 @@ function post<T>(path: string, payload: unknown): Promise<T> {
   return request<T>(path, { method: 'POST', body: JSON.stringify(payload) })
 }
 
+const LOCAL_API_KEY_STORAGE = 'interagt-api-key'
+
+interface StoredApiKeyResponse {
+  api_key: string | null
+}
+
 const api = {
-  getOrganisms: () => request<OrganismsResponse>('/api/metadata/organisms'),
-  getHpoTerms: () => request<HpoTermsResponse>('/api/metadata/hpo-terms'),
-  getTrackExplanations: () =>
-    request<TrackExplanations>('/api/metadata/track-explanations'),
+  getOrganisms: () => request<OrganismsResponse>('/metadata/organisms'),
+  getHpoTerms: () => request<HpoTermsResponse>('/metadata/hpo-terms'),
   postOntologyTerms: (apiKey: string, organism: string) =>
-    post<OntologyTermsResponse>('/api/metadata/ontology-terms', {
+    post<OntologyTermsResponse>('/metadata/ontology-terms', {
       api_key: apiKey,
       organism,
     }),
   postTracks: (apiKey: string, organism: string) =>
-    post<TracksResponse>('/api/metadata/tracks', { api_key: apiKey, organism }),
+    post<TracksResponse>('/metadata/tracks', { api_key: apiKey, organism }),
   postNormalize: (variant: string, organism: string) =>
-    post<NormalizeResponse>('/api/variants/normalize', { variant, organism }),
+    post<NormalizeResponse>('/variants/normalize', { variant, organism }),
   postScore: (payload: {
     api_key: string
     organism: string
@@ -217,7 +246,7 @@ const api = {
     sequence_length: number
     scorers: string[]
     hpo_terms: string[]
-  }) => post<ScoreResponse>('/api/variants/score', payload),
+  }) => post<ScoreResponse>('/variants/score', payload),
   postTrackPlot: (payload: {
     api_key: string
     organism: string
@@ -225,7 +254,34 @@ const api = {
     sequence_length: number
     ontology_terms: string[]
     tracks: string[]
-  }) => post<TrackPlotResponse>('/api/plots/tracks', payload),
+  }) => post<TrackPlotResponse>('/plots/tracks', payload),
+  getStoredApiKey: () => request<StoredApiKeyResponse>('/keystore/api-key'),
+  setStoredApiKey: (apiKey: string) =>
+    post<StoredApiKeyResponse>('/keystore/api-key', { api_key: apiKey }),
+}
+
+// ── API key persistence ─────────────────────────────────────────────────────
+//
+// Packaged (pywebview) builds route through app_launcher.py's OS-keychain
+// endpoints. Plain `bun run dev` browser tabs (no app_launcher backend) get
+// a 404 from that route and fall back to localStorage, matching the old
+// browser-tab behavior.
+
+export async function loadApiKey(): Promise<string> {
+  try {
+    const res = await api.getStoredApiKey()
+    return res.api_key ?? ''
+  } catch {
+    return localStorage.getItem(LOCAL_API_KEY_STORAGE) ?? ''
+  }
+}
+
+export async function saveApiKey(key: string): Promise<void> {
+  try {
+    await api.setStoredApiKey(key)
+  } catch {
+    localStorage.setItem(LOCAL_API_KEY_STORAGE, key)
+  }
 }
 
 // ── Hooks ────────────────────────────────────────────────────────────────────
@@ -234,14 +290,6 @@ export function useOrganisms() {
   return useQuery({
     queryKey: ['organisms'],
     queryFn: api.getOrganisms,
-    staleTime: Infinity,
-  })
-}
-
-export function useTrackExplanations() {
-  return useQuery({
-    queryKey: ['track-explanations'],
-    queryFn: api.getTrackExplanations,
     staleTime: Infinity,
   })
 }
@@ -280,13 +328,18 @@ export function useVariantNormalization(
   organismLabel: string,
 ) {
   const trimmed = variant.trim()
-  return useQuery({
-    queryKey: ['normalize', trimmed, organismLabel],
-    queryFn: () => api.postNormalize(trimmed, organismLabel),
-    enabled: trimmed.length > 0 && organismLabel.length > 0,
+  const debounced = useDebouncedValue(trimmed, 350)
+  const query = useQuery({
+    queryKey: ['normalize', debounced, organismLabel],
+    queryFn: () => api.postNormalize(debounced, organismLabel),
+    enabled: debounced.length > 0 && organismLabel.length > 0,
     retry: false,
     staleTime: 5 * 60 * 1000,
   })
+  // True while waiting out the debounce or while the request itself is in flight -
+  // covers the whole window during which `normalized` may be stale.
+  const isValidating = trimmed !== debounced || query.isFetching
+  return { ...query, isValidating }
 }
 
 export function useVariantScores() {
@@ -307,7 +360,7 @@ export function useVariantScores() {
 export function useTrackPlot() {
   return useMutation<
     TrackPlotResponse,
-    Error,
+    ApiRequestError,
     {
       api_key: string
       organism: string

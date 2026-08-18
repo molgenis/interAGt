@@ -5,7 +5,7 @@ import logging
 import logging.config
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 
 # ---------------------------------------------------------------------------
@@ -46,12 +46,14 @@ class AppError(Exception):
         message: str,
         code: Optional[str] = None,
         status_code: Optional[int] = None,
+        details: Optional[list[dict[str, Any]]] = None,
     ) -> None:
         super().__init__(message)
         if code is not None:
             self.code = code
         if status_code is not None:
             self.status_code = status_code
+        self.details = details
 
 
 class InvalidRequestError(AppError):
@@ -79,6 +81,18 @@ class NoVariantResultsError(AppError):
     status_code = 400
 
 
+class NoTrackDataError(AppError):
+    """Raised when none of the requested tracks yielded any plottable data.
+
+    Carries a `details` list of {track, reason_code, message} so the caller
+    can tell apart e.g. a track unsupported by the organism from a track x
+    tissue combination AlphaGenome simply never measured.
+    """
+
+    code = "no_track_data"
+    status_code = 400
+
+
 # ---------------------------------------------------------------------------
 # Logging
 # ---------------------------------------------------------------------------
@@ -97,33 +111,58 @@ def get_log_file_path() -> Path:
 
 def configure_logging() -> Path:
     log_file = get_log_file_path()
-    log_file.parent.mkdir(parents=True, exist_ok=True)
-    logging.config.dictConfig(
-        {
-            "version": 1,
-            "disable_existing_loggers": False,
-            "formatters": {
-                "standard": {
-                    "format": "%(asctime)s %(levelname)s %(name)s %(message)s",
+    try:
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+        logging.config.dictConfig(
+            {
+                "version": 1,
+                "disable_existing_loggers": False,
+                "formatters": {
+                    "standard": {
+                        "format": "%(asctime)s %(levelname)s %(name)s %(message)s",
+                    },
                 },
-            },
-            "handlers": {
-                "console": {
-                    "class": "logging.StreamHandler",
-                    "formatter": "standard",
+                "handlers": {
+                    "console": {
+                        "class": "logging.StreamHandler",
+                        "formatter": "standard",
+                        "level": get_log_level(),
+                    },
+                    "file": {
+                        "class": "logging.FileHandler",
+                        "formatter": "standard",
+                        "filename": str(log_file),
+                        "level": get_log_level(),
+                    },
+                },
+                "root": {
+                    "handlers": ["console", "file"],
                     "level": get_log_level(),
                 },
-                "file": {
-                    "class": "logging.FileHandler",
-                    "formatter": "standard",
-                    "filename": str(log_file),
+            }
+        )
+    except (PermissionError, OSError) as e:
+        # Warning?
+        logging.config.dictConfig(
+            {
+                "version": 1,
+                "disable_existing_loggers": False,
+                "formatters": {
+                    "standard": {
+                        "format": "%(asctime)s %(levelname)s %(name)s %(message)s",
+                    },
+                },
+                "handlers": {
+                    "console": {
+                        "class": "logging.StreamHandler",
+                        "formatter": "standard",
+                        "level": get_log_level(),
+                    },
+                },
+                "root": {
+                    "handlers": ["console"],
                     "level": get_log_level(),
                 },
-            },
-            "root": {
-                "handlers": ["console", "file"],
-                "level": get_log_level(),
-            },
-        }
-    )
+            }
+        )
     return log_file

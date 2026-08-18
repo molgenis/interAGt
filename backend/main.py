@@ -58,15 +58,19 @@ def create_app() -> FastAPI:
     @app.exception_handler(AppError)
     async def handle_app_error(request: Request, exc: AppError) -> JSONResponse:
         LOGGER.warning(
-            "app_error path=%s code=%s status_code=%s message=%s",
+            "app_error path=%s code=%s status_code=%s message=%s details=%s",
             request.url.path,
             exc.code,
             exc.status_code,
             str(exc),
+            exc.details,
         )
+        error_body: dict[str, object] = {"code": exc.code, "message": str(exc)}
+        if exc.details is not None:
+            error_body["details"] = exc.details
         return JSONResponse(
             status_code=exc.status_code,
-            content={"error": {"code": exc.code, "message": str(exc)}},
+            content={"error": error_body},
         )
 
     @app.exception_handler(RequestValidationError)

@@ -1,19 +1,27 @@
 import { useEffect, useState } from 'react'
-import { BarChart3, KeyRound, LineChart, Loader2 } from 'lucide-react'
+import { BarChart3, KeyRound, LineChart, Loader2, X } from 'lucide-react'
 import {
   useOrganisms,
-  useTrackExplanations,
   useHpoTerms,
   useVariantNormalization,
   useOntologyTerms,
   useTracks,
   useVariantScores,
   useTrackPlot,
+  loadApiKey,
+  saveApiKey as persistApiKey,
+  type ApiRequestError,
+  type TrackIssue,
 } from '@/api'
+import { TRACK_EXPLANATIONS, SCORER_EXPLANATIONS, ALL_RESULTS_EXPLANATION } from '@/trackExplanations'
 import { ApiKeyDialog } from '@/ApiKeyDialog'
+import { AboutDialog } from '@/AboutDialog'
+import { FAQDialog } from '@/FAQDialog'
+import { InfoTooltip } from '@/InfoTooltip'
 import { MultiSelect } from '@/MultiSelect'
 import { SeqLengthSelect, type SequenceLength } from '@/SeqLengthSelect'
-import { ScoresTable, ScoresSummaryCharts } from '@/ScoresDisplay'
+import { ScoresTable } from '@/ScoresDisplay'
+import { ScoresSummaryCharts } from '@/ScoresCharts'
 import { ThemeToggle } from '@/ThemeToggle'
 import { TrackPlot, DownloadHtmlButton } from '@/TrackDisplay'
 import { useTheme } from '@/theme'
@@ -26,7 +34,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/ui/select'
-import { Separator } from '@/ui/separator'
 import { Tabs, TabsList, TabsTrigger } from '@/ui/tabs'
 import { Input } from '@/ui/input'
 import { CheckList } from '@/CheckList'
@@ -38,10 +45,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/ui/dialog'
+import { sanitizeVariantForFilename } from '@/DownloadScores'
 
 const DEFAULT_ORGANISM_VALUE = 'HOMO_SAPIENS'
 const FALLBACK_ORGANISM_LABEL = 'Human (hg38)'
-const API_KEY_STORAGE = 'interagt-api-key'
 
 type Mode = 'scores' | 'tracks'
 
@@ -52,7 +59,21 @@ function curieFromDisplay(display: string): string {
   return display.slice(open + 1, close)
 }
 
-function ErrorNote({ title, message }: { title: string; message: string }) {
+// Distinguishes an Ensembl/VariantValidator outage (backend code `upstream_failure`)
+// from a genuinely invalid variant, so the UI can point the blame elsewhere.
+function isUpstreamOutage(error: unknown): boolean {
+  return (error as ApiRequestError)?.code === 'upstream_failure'
+}
+
+function ErrorNote({
+  title,
+  message,
+  details,
+}: {
+  title: string
+  message: string
+  details?: TrackIssue[]
+}) {
   return (
     <div
       role="alert"
@@ -60,6 +81,94 @@ function ErrorNote({ title, message }: { title: string; message: string }) {
     >
       <div className="font-medium">{title}</div>
       <div className="mt-0.5 text-xs">{message}</div>
+      {details && details.length > 0 && (
+        <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-xs">
+          {details.map((d, i) => (
+            <li key={`${d.track}-${i}`}>
+              <span className="font-medium">{d.track}:</span> {d.message}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+function WarningsNote({
+  warnings,
+  total,
+  onDismiss,
+}: {
+  warnings: TrackIssue[]
+  total: number
+  onDismiss: () => void
+}) {
+  return (
+    <div
+      role="alert"
+      className="relative rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 pr-8 text-sm text-amber-700 dark:text-amber-500"
+    >
+      <button
+        type="button"
+        onClick={onDismiss}
+        aria-label="Dismiss"
+        className="absolute right-2 top-2 rounded-sm opacity-70 hover:opacity-100"
+      >
+        <X className="size-4" />
+      </button>
+      <div className="font-medium">
+        {warnings.length} of {total} track{total === 1 ? '' : 's'} had no data
+      </div>
+      <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-xs">
+        {warnings.map((w, i) => (
+          <li key={`${w.track}-${i}`}>
+            <span className="font-medium">{w.track}:</span> {w.message}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function TranscriptWarningNote({
+  message,
+  onDismiss,
+}: {
+  message: string
+  onDismiss: () => void
+}) {
+  return (
+    <div
+      role="alert"
+      className="relative rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 pr-8 text-sm text-amber-700 dark:text-amber-500"
+    >
+      <button
+        type="button"
+        onClick={onDismiss}
+        aria-label="Dismiss"
+        className="absolute right-2 top-2 rounded-sm opacity-70 hover:opacity-100"
+      >
+        <X className="size-4" />
+      </button>
+      <div className="font-medium">Gene annotation row unavailable</div>
+      <p className="mt-0.5 text-xs">{message}</p>
+    </div>
+  )
+}
+
+function MouseAnnotationWarning() {
+  return (
+    <div
+      role="alert"
+      className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-500"
+    >
+      <div className="font-medium">Mouse gene annotations may be misaligned</div>
+      <p className="mt-0.5 text-xs">
+        AlphaGenome's served mouse annotation file is coordinate-mismatched
+        (mm39 coordinates under an mm10 label), so transcript/gene models can
+        render offset from the actual signal in this track. AlphaGenome's
+        track and variant data are unaffected. See the FAQ for detail.
+      </p>
     </div>
   )
 }
@@ -89,9 +198,7 @@ function EmptyState({
 export default function App() {
   const { theme, setTheme, isDark } = useTheme()
 
-  const [apiKey, setApiKey] = useState(
-    () => localStorage.getItem(API_KEY_STORAGE) ?? '',
-  )
+  const [apiKey, setApiKey] = useState('')
   const [mode, setMode] = useState<Mode>('scores')
   const [organismValue, setOrganismValue] = useState(DEFAULT_ORGANISM_VALUE)
   const [variantInput, setVariantInput] = useState('')
@@ -104,6 +211,8 @@ export default function App() {
   const [selectedTissues, setSelectedTissues] = useState<string[]>([])
   const [selectedTracks, setSelectedTracks] = useState<string[]>([])
   const [pendingAction, setPendingAction] = useState<Mode | null>(null)
+  const [warningsDismissed, setWarningsDismissed] = useState(false)
+  const [transcriptWarningDismissed, setTranscriptWarningDismissed] = useState(false)
 
   const organismsQuery = useOrganisms()
   const organisms = organismsQuery.data?.organisms ?? []
@@ -111,7 +220,6 @@ export default function App() {
   const organismLabel = currentOrganism?.label ?? FALLBACK_ORGANISM_LABEL
   const isHuman = organismLabel === FALLBACK_ORGANISM_LABEL
 
-  const trackExplanationsQuery = useTrackExplanations()
   const hpoTermsQuery = useHpoTerms(isHuman)
   const normalizationQuery = useVariantNormalization(variantInput, organismLabel)
   const ontologyQuery = useOntologyTerms(apiKey, organismValue)
@@ -120,10 +228,20 @@ export default function App() {
   const scoreMutation = useVariantScores()
   const trackPlotMutation = useTrackPlot()
 
-  function saveApiKey(key: string) {
-    localStorage.setItem(API_KEY_STORAGE, key)
+  function handleSaveApiKey(key: string) {
     setApiKey(key)
+    void persistApiKey(key)
   }
+
+  useEffect(() => {
+    let cancelled = false
+    loadApiKey().then((key) => {
+      if (!cancelled) setApiKey(key)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     if (currentOrganism) {
@@ -140,7 +258,20 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tracksQuery.data])
 
-  const normalization = normalizationQuery.data
+  useEffect(() => {
+    if (trackPlotMutation.data) {
+      setWarningsDismissed(false)
+      setTranscriptWarningDismissed(false)
+    }
+  }, [trackPlotMutation.data])
+
+  useEffect(() => {
+    setSelectedTissues([]);
+  }, [organismValue]);
+
+  const normalization = normalizationQuery.isValidating
+    ? undefined
+    : normalizationQuery.data
   const alternatives = normalization?.alternatives ?? []
   const normalizedVariant = selectedAlternative ?? normalization?.normalized ?? ''
   const needsConfirmation = Boolean(normalization?.needs_confirmation)
@@ -152,19 +283,25 @@ export default function App() {
     (t) => !excludedTracks.includes(t),
   )
   const tissueOptions = ontologyQuery.data?.display_options ?? []
-  const hpoOptions = hpoTermsQuery.data?.terms ?? []
+  const hpoTerms = hpoTermsQuery.data?.terms ?? []
+  const hpoOptions = hpoTerms.map((t) => t.term)
+  const hpoDescriptions = Object.fromEntries(
+    hpoTerms.map((t) => [t.term, t.definition || 'No definition available.']),
+  )
 
   const canScore =
     Boolean(apiKey) &&
     Boolean(normalizedVariant) &&
     selectedScorers.length > 0 &&
-    !scoreMutation.isPending
+    !scoreMutation.isPending &&
+    !normalizationQuery.isValidating
   const canVisualize =
     Boolean(apiKey) &&
     Boolean(normalizedVariant) &&
     selectedTissues.length > 0 &&
     selectedTracks.length > 0 &&
-    !trackPlotMutation.isPending
+    !trackPlotMutation.isPending &&
+    !normalizationQuery.isValidating
 
   function runScore() {
     scoreMutation.mutate({
@@ -215,34 +352,64 @@ export default function App() {
 
   const scoreData = scoreMutation.data
   const trackPayload = trackPlotMutation.data ?? null
-  const trackExplanations = trackExplanationsQuery.data
+  const trackExplanations = SCORER_EXPLANATIONS
 
   return (
     <div className="flex h-full flex-col">
       <header className="flex shrink-0 items-center gap-4 border-b px-4 py-3">
-        <img src="/logo_interAGt.svg" alt="interAGt" className="h-12" />
+        <img src="/logo_interAGt.svg" alt="interAGt" className="h-14" />
         <span className="hidden text-sm text-muted-foreground lg:inline">
           An intuitive interface to AlphaGenome
         </span>
         <div className="ml-auto flex items-center gap-1">
+          <AboutDialog />
+          <FAQDialog />
           <ThemeToggle theme={theme} setTheme={setTheme} />
-          <ApiKeyDialog apiKey={apiKey} onSave={saveApiKey} />
+          <ApiKeyDialog apiKey={apiKey} onSave={handleSaveApiKey} />
         </div>
       </header>
 
       <div className="flex min-h-0 flex-1">
         {/* Left panel: inputs */}
         <aside className="flex w-[22rem] shrink-0 flex-col overflow-y-auto border-r p-4">
-          <Tabs value={mode} onValueChange={(v) => setMode(v as Mode)}>
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="scores">Scores</TabsTrigger>
-              <TabsTrigger value="tracks">Tracks</TabsTrigger>
-            </TabsList>
-          </Tabs>
+          <div className="grid gap-2">
+            <div className="flex items-center gap-2">
+              <Label htmlFor="mode">Output type</Label>
+              <InfoTooltip
+                content={
+                  <>
+                    Scores give a single variant-effect score per gene or
+                    track. Tracks plot predicted genomic signal across the
+                    region as a curve. Switching swaps both the inputs below
+                    and the results panel; each mode keeps its own results
+                    until you rerun it.
+                  </>
+                }
+              />
+            </div>
+            <Tabs value={mode} onValueChange={(v) => setMode(v as Mode)}>
+              <TabsList id="mode" className="grid w-full grid-cols-2">
+                <TabsTrigger value="scores">Scores</TabsTrigger>
+                <TabsTrigger value="tracks">Tracks</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
 
           <div className="mt-4 grid gap-4">
             <div className="grid gap-2">
-              <Label htmlFor="organism">Organism</Label>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="organism">Organism</Label>
+                <InfoTooltip
+                  content={
+                    <>
+                      Human predictions use the hg38 (GRCh38.p13) genome
+                      build; mouse predictions use mm10 (GRCm38.p6). No other
+                      species are supported. AlphaGenome is licensed for
+                      non-commercial use only; see About.
+                    </>
+                  }
+                />
+              </div>
               <Tabs value={organismValue} onValueChange={setOrganismValue}>
                 <TabsList id="organism" className="grid w-full grid-cols-2">
                   {organisms.map((o) => (
@@ -257,26 +424,20 @@ export default function App() {
             <div className="grid gap-2">
               <div className="flex items-center gap-2">
                 <Label htmlFor="variant">Variant</Label>
-                <div className="group relative">
-                  <svg xmlns="http://www.w3.org/2000/svg"
-                      className="h-4 w-4 text-muted-foreground"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                      />
-                  </svg>
-                  <div className="absolute hidden rounded border bg-popover w-64 p-2 text-xs group-hover:block">
-                    Variant notation<br/>
-                    chrom:pos:ref:alt (human/mouse)<br/>
-                    Human only: HGVS or rsID<br/>
-                    Examples: chr1:12345:A:T, NM_001234.5:c.123A&gt;T, rs12345
-                  </div>
-                </div>
+                <InfoTooltip
+                  content={
+                    <>
+                      Variant notation
+                      <br />
+                      chrom:pos:ref:alt (human/mouse)
+                      <br />
+                      Human only: HGVS or rsID
+                      <br />
+                      Examples: chr1:12345:A:T, NM_001234.5:c.123A&gt;T,
+                      rs12345
+                    </>
+                  }
+                />
               </div>
               <Input
                 id="variant"
@@ -288,9 +449,18 @@ export default function App() {
                 }}
               />
               {normalizationQuery.isError && (
-                <p className="text-xs text-destructive">
-                  {(normalizationQuery.error as Error).message}
-                </p>
+                isUpstreamOutage(normalizationQuery.error) ? (
+                  <p className="text-xs text-amber-600 dark:text-amber-500">
+                    Ensembl/VariantValidator looks temporarily unavailable -
+                    that's an outage on their end, not this app. Wait and
+                    retry, or switch to chr:pos:ref:alt format (e.g.
+                    chr1:12345:A:T), which doesn't need that lookup.
+                  </p>
+                ) : (
+                  <p className="text-xs text-destructive">
+                    {(normalizationQuery.error as Error).message}
+                  </p>
+                )
               )}
               {needsConfirmation && confirmation ? (
                 <p className="text-xs text-amber-600 dark:text-amber-500">
@@ -329,80 +499,126 @@ export default function App() {
             )}
 
             <div className="grid gap-2">
-              <Label htmlFor="seq-length">Sequence window</Label>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="seq-length">Sequence window</Label>
+                <InfoTooltip
+                  content={
+                    <>
+                      Length of genomic sequence, centered on the variant. AlphaGenome recommends
+                      the full 1 Mb window for the best accuracy. At longer
+                      windows, in case AlphaGenome returns some tracks at a coarser
+                      native resolution, the app
+                      linearly interpolates them to fill the plot, so
+                      the curve is smoothed, not per-base prediction.
+                    </>
+                  }
+                />
+              </div>
               <SeqLengthSelect
                 id="seq-length"
                 value={sequenceLength}
                 onChange={setSequenceLength}
               />
-              <p className="text-xs text-muted-foreground">
-                Sequence context around the variant used for prediction.
-              </p>
             </div>
-
-            <Separator />
-
             {!apiKey && (
               <p className="text-xs text-muted-foreground">
                 Add an API key to load organism-specific options.
               </p>
             )}
 
-            {mode === 'scores' ? (
-              <>
-                <div className="grid gap-2">
-                  <Label>Variant scorers</Label>
-                  <CheckList
-                    options={availableScorers}
-                    selected={selectedScorers}
-                    onChange={setSelectedScorers}
+            <div className="grid gap-2">
+              <div className="flex items-center gap-2">
+                <Label>Tracks</Label>
+                <InfoTooltip
+                  content={
+                    mode === 'scores' ? (
+                      <>
+                        Variant-effect scorers to run. Available scorers
+                        depend on the selected organism; PROCAP and
+                        Polyadenylation aren't available for Mouse, since
+                        AlphaGenome doesn't provide that data for this
+                        organism.
+                      </>
+                    ) : (
+                      <>
+                        Genomic signal tracks to plot. Available tracks
+                        depend on the selected organism; Mouse has no PROCAP
+                        track, since AlphaGenome doesn't provide that data
+                        for this organism.
+                      </>
+                    )
+                  }
+                />
+              </div>
+              <CheckList
+                options={mode === 'scores' ? availableScorers : visualizationTracks}
+                selected={mode === 'scores' ? selectedScorers : selectedTracks}
+                onChange={mode === 'scores' ? setSelectedScorers : setSelectedTracks}
+                descriptions={mode === 'scores' ? SCORER_EXPLANATIONS : TRACK_EXPLANATIONS}
+                {...(mode === 'tracks' && { emptyMessage: 'No tracks available.' })}
+              />
+            </div>
+
+            {mode === 'scores' && isHuman && (
+              <div className="grid gap-2">
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="hpo">HPO terms (optional)</Label>
+                  <InfoTooltip
+                    content={
+                      <>
+                        Selecting HPO terms doesn't filter results; it only
+                        re-sorts them, prioritizing genes linked to your
+                        selected phenotypes first. Hover (or focus) a term
+                        for its definition. Very broad terms may match nearly
+                        every gene in the window, making the re-sort
+                        meaningless.
+                      </>
+                    }
                   />
                 </div>
+                <MultiSelect
+                  id="hpo"
+                  options={hpoOptions}
+                  selected={selectedHpoTerms}
+                  onChange={setSelectedHpoTerms}
+                  placeholder="Search HPO terms…"
+                  disabled={hpoOptions.length === 0}
+                  descriptions={hpoDescriptions}
+                />
+              </div>
+            )}
 
-                {isHuman && (
-                  <div className="grid gap-2">
-                    <Label htmlFor="hpo">HPO terms (optional)</Label>
-                    <MultiSelect
-                      id="hpo"
-                      options={hpoOptions}
-                      selected={selectedHpoTerms}
-                      onChange={setSelectedHpoTerms}
-                      placeholder="Search HPO terms…"
-                      disabled={hpoOptions.length === 0}
-                    />
-                  </div>
-                )}
-              </>
-            ) : (
-              <>
-                <div className="grid gap-2">
+            {mode === 'tracks' && (
+              <div className="grid gap-2">
+                <div className="flex items-center gap-2">
                   <Label htmlFor="tissues">Tissues (max. 10)</Label>
-                  <MultiSelect
-                    id="tissues"
-                    options={tissueOptions}
-                    selected={selectedTissues}
-                    onChange={setSelectedTissues}
-                    placeholder="Search & select tissues…"
-                    maxSelected={10}
-                    disabled={tissueOptions.length === 0}
-                  />
-                  {ontologyQuery.isError && (
-                    <p className="text-xs text-destructive">
-                      {(ontologyQuery.error as Error).message}
-                    </p>
-                  )}
-                </div>
-
-                <div className="grid gap-2">
-                  <Label>Tracks</Label>
-                  <CheckList
-                    options={visualizationTracks}
-                    selected={selectedTracks}
-                    onChange={setSelectedTracks}
-                    emptyMessage="No tracks available."
+                  <InfoTooltip
+                    content={
+                      <>
+                        Each option's prefix names its ontology: UBERON
+                        (anatomical structure), CL (cell type), CLO (cell
+                        line), EFO (assay/experimental context), NTR
+                        (not-yet-formalized term). The 10-tissue cap is a UI
+                        choice, not an AlphaGenome limit.
+                      </>
+                    }
                   />
                 </div>
-              </>
+                <MultiSelect
+                  id="tissues"
+                  options={tissueOptions}
+                  selected={selectedTissues}
+                  onChange={setSelectedTissues}
+                  placeholder="Search & select tissues…"
+                  maxSelected={10}
+                  disabled={tissueOptions.length === 0}
+                />
+                {ontologyQuery.isError && (
+                  <p className="text-xs text-destructive">
+                    {(ontologyQuery.error as Error).message}
+                  </p>
+                )}
+              </div>
             )}
           </div>
 
@@ -410,34 +626,28 @@ export default function App() {
             {mode === 'scores' ? (
               <>
                 <Button onClick={handleScore} disabled={!canScore}>
-                  {scoreMutation.isPending && (
+                  {(scoreMutation.isPending || normalizationQuery.isValidating) && (
                     <Loader2 className="size-4 animate-spin" />
                   )}
-                  {scoreMutation.isPending ? 'Scoring…' : 'Get variant scores'}
+                  {scoreMutation.isPending
+                    ? 'Scoring…'
+                    : normalizationQuery.isValidating
+                      ? 'Validating variant…'
+                      : 'Get variant scores'}
                 </Button>
-
-                {scoreMutation.isError && (
-                  <ErrorNote
-                    title="Scoring failed"
-                    message={(scoreMutation.error as Error).message}
-                  />
-                )}
               </>
             ) : (
               <>
                 <Button onClick={handleVisualize} disabled={!canVisualize}>
-                  {trackPlotMutation.isPending && (
+                  {(trackPlotMutation.isPending || normalizationQuery.isValidating) && (
                     <Loader2 className="size-4 animate-spin" />
                   )}
-                  {trackPlotMutation.isPending ? 'Running model…' : 'Visualize'}
+                  {trackPlotMutation.isPending
+                    ? 'Running model…'
+                    : normalizationQuery.isValidating
+                      ? 'Validating variant…'
+                      : 'Visualize'}
                 </Button>
-
-                {trackPlotMutation.isError && (
-                  <ErrorNote
-                    title="Visualization failed"
-                    message={(trackPlotMutation.error as Error).message}
-                  />
-                )}
               </>
             )}
           </div>
@@ -446,20 +656,27 @@ export default function App() {
         {/* Right panel: results */}
         <main className="min-w-0 flex-1 overflow-y-auto p-6">
           {mode === 'scores' ? (
-            scoreData && scoreData.rows.length > 0 ? (
+            scoreMutation.isError ? (
+              <ErrorNote
+                title="Scoring failed"
+                message={(scoreMutation.error as Error).message}
+              />
+            ) : scoreData && scoreData.rows.length > 0 ? (
               <div className="space-y-6">
                 <details className="rounded-lg border p-4">
                   <summary className="cursor-pointer text-sm font-medium">
                     All results
                   </summary>
                   <div className="mt-4">
-                    {trackExplanations?.scores && (
-                      <p className="mb-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 text-sm">
-                        {trackExplanations.scores}
-                      </p>
-                    )}
-                    <ScoresTable rows={scoreData.rows} />
+                    <p className="mb-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 text-sm">
+                      {ALL_RESULTS_EXPLANATION}
+                    </p>
+                    <ScoresTable
+                      rows={scoreData.rows}
+                      downloadFileName={`${sanitizeVariantForFilename(selectedAlternative || normalizedVariant)}_variant_scores`}
+                    />
                   </div>
+                  
                 </details>
 
                 <ScoresSummaryCharts
@@ -467,6 +684,7 @@ export default function App() {
                   outputTypes={scoreData.output_types}
                   explanations={trackExplanations}
                   isDark={isDark}
+                  fileName={`${sanitizeVariantForFilename(selectedAlternative || normalizedVariant)}_variant_scores_summary.html`}
                 />
               </div>
             ) : (
@@ -486,13 +704,35 @@ export default function App() {
                 }
               />
             )
+          ) : trackPlotMutation.isError ? (
+            <ErrorNote
+              title="Visualization failed"
+              message={(trackPlotMutation.error as ApiRequestError).message}
+              details={(trackPlotMutation.error as ApiRequestError).details}
+            />
           ) : trackPayload ? (
-            <div className="rounded-lg border p-6 space-y-4">
-              <DownloadHtmlButton
-                fileName={`${normalizedVariant}_tracks.html`}
-                payload={trackPayload}
-              />
-              <TrackPlot payload={trackPayload} isDark={isDark} />
+            <div className="space-y-4">
+              {!isHuman && <MouseAnnotationWarning />}
+              {!transcriptWarningDismissed && trackPayload.transcript_warning && (
+                <TranscriptWarningNote
+                  message={trackPayload.transcript_warning}
+                  onDismiss={() => setTranscriptWarningDismissed(true)}
+                />
+              )}
+              {!warningsDismissed && trackPayload.warnings.length > 0 && (
+                <WarningsNote
+                  warnings={trackPayload.warnings}
+                  total={selectedTracks.length}
+                  onDismiss={() => setWarningsDismissed(true)}
+                />
+              )}
+              <div className="rounded-lg border p-6 space-y-4">
+                <DownloadHtmlButton
+                  fileName={`${normalizedVariant}_tracks.html`}
+                  payload={trackPayload}
+                />
+                <TrackPlot payload={trackPayload} isDark={isDark} />
+              </div>
             </div>
           ) : (
             <EmptyState

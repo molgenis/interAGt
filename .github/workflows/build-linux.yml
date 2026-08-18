@@ -1,0 +1,112 @@
+name: Build Linux AppImage
+
+# PyInstaller cannot cross-compile, so the Linux build has to run on a Linux
+# host of the target arch. This runs packaging/package_linux.sh
+# (packaging/build_linux.sh + appimagetool) and uploads one AppImage per arch.
+#
+# Runner images are deliberately different per arch, because a PyInstaller
+# binary only runs on glibc at least as new as its build host's, and the Qt
+# wheels set a floor:
+#   x86_64  — PyQt6 wheels are manylinux_2_34, so ubuntu-22.04 (glibc 2.35) is
+#             the oldest usable image, and it gives the widest reach.
+#   aarch64 — PyQt6 publishes only manylinux_2_39 aarch64 wheels from 6.8
+#             onward, so 22.04 cannot install them; ubuntu-24.04-arm
+#             (glibc 2.39) is the floor. The arm64 AppImage therefore needs
+#             Ubuntu 24.04 / Debian 13 or newer.
+# Pinning PyQt6 back to 6.7.x would buy a manylinux_2_28 aarch64 wheel, at the
+# cost of dragging the whole Qt stack back to mid-2024 — not worth it.
+#
+# Builds are unsigned, same caveat the README gives for the other platforms.
+on:
+  # Manual only, plus release publishes below — no push trigger, matching the
+  # macOS and Windows workflows. Linux minutes are the cheapest tier, but the
+  # trigger shape is kept consistent on purpose.
+  workflow_dispatch:
+  # Publishing a GitHub release attaches the AppImage to it.
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false # an arm64 runner hiccup must not cancel x86_64
+      matrix:
+        include:
+          - { runner: ubuntu-22.04, arch: x86_64 }
+          - { runner: ubuntu-24.04-arm, arch: aarch64 }
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: oven-sh/setup-bun@v2
+
+      # build_linux.sh bundles frontend/dist but never builds it. `vite build`
+      # defaults to production mode, so frontend/.env.production supplies
+      # VITE_API_BASE_URL=http://localhost:8000/api — the path app_launcher.py
+      # mounts the backend under.
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          bun install --frozen-lockfile
+          bun run build
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      # PyInstaller bundles the shared libraries Qt links against by walking
+      # each .so's dependencies, so those libraries have to exist on the build
+      # host even though nothing here launches a GUI. Without them the
+      # AppImage builds but the window fails to open on the user's machine.
+      - name: Install Qt runtime libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libegl1 libgl1 libnss3 libxkbcommon-x11-0 libxcomposite1 \
+            libxdamage1 libxrandr2 libxtst6 libxslt1.1
+          # libasound2 was renamed libasound2t64 by Ubuntu 24.04's time_t
+          # transition, so the two runner images need different names.
+          sudo apt-get install -y --no-install-recommends libasound2t64 \
+            || sudo apt-get install -y --no-install-recommends libasound2
+
+      # pywebview[qt] pulls PyQt6 + PyQt6-WebEngine, which is what makes the
+      # bundle self-contained on Linux — see the comment in build_linux.sh.
+      # PyInstaller is build-only, so it is pinned here rather than added to
+      # backend/requirements.txt.
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/requirements.txt
+          python -m pip install "pywebview[qt]==6.2.1"
+          python -m pip install pyinstaller==6.21.0
+
+      # packaging/package_linux.sh runs packaging/build_linux.sh, then stages
+      # an AppDir with a .desktop entry and icon and compresses it with
+      # appimagetool, which it downloads for $ARCH.
+      - name: Build AppImage
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: ./packaging/package_linux.sh
+
+      # package_linux.sh always writes dist/InterAGt.AppImage regardless of
+      # arch; rename here so the two matrix legs don't clobber each other's
+      # artifact/release upload.
+      - name: Rename AppImage for arch
+        run: mv dist/InterAGt.AppImage dist/InterAGt-${{ matrix.arch }}.AppImage
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: InterAGt-AppImage-${{ matrix.arch }}
+          path: dist/InterAGt-${{ matrix.arch }}.AppImage
+          if-no-files-found: error
+
+      - name: Attach AppImage to release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$TAG" dist/InterAGt-${{ matrix.arch }}.AppImage --clobber

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field, replace as dc_replace
 from functools import lru_cache
 from pathlib import Path
@@ -18,6 +19,7 @@ from backend.core import (
     InvalidRequestError,
     InvalidVariantError,
     MissingApiKeyError,
+    NoTrackDataError,
     NoVariantResultsError,
     UpstreamServiceError,
 )
@@ -34,8 +36,15 @@ ORGANISM_MAP = {
 }
 
 ORGANISM_EXAMPLE_VARIANTS = {
-    "Human (hg38)": "chr5:1295113:G:A",
-    "Mouse (mm10)": "chr13:73626861:A:G",
+    # Chosen to produce nonzero rows for every scorer in SCORER_SELECTION_CHOICES
+    # (incl. splice/polyadenylation, which need a variant inside an actively
+    # spliced, well-expressed gene) and nonzero tracks for common ontology
+    # terms. Human: intronic APOL4 (chr22), used as the known-issues.md
+    # scorer-coverage repro. Mouse: Actb (chr5), a housekeeping gene with no
+    # human-only-scorer gaps to worry about. Verified against the live
+    # AlphaGenome API — see backend/services.py git history for the check.
+    "Human (hg38)": "chr22:36201698:A:C",
+    "Mouse (mm10)": "chr5:142889961:G:A",
 }
 
 SCORER_SELECTION_CHOICES = [
@@ -46,28 +55,15 @@ SCORER_SELECTION_CHOICES = [
     "DNASE",
     "CHIP_HISTONE",
     "CHIP_TF",
-    "Polyadenylation",
     "CONTACT_MAPS",
+    "SPLICE_SITES",
+    "SPLICE_SITE_USAGE",
+    "SPLICE_JUNCTIONS",
+    "Polyadenylation",
 ]
 
 DEFAULT_TRACK_SELECTION = ["RNA_SEQ", "CHIP_TF", "ATAC"]
-EXCLUDED_VISUALIZATION_TRACKS = ["SPLICE_SITES", "SPLICE_SITE_USAGE"]
-
-TRACK_EXPLANATIONS = {
-    "scores": "Results from variant scoring, sorted by raw_score and HPO - gene matching. Quantile scores are standardized, track-specific metric that maps a variant's raw predicted impact score to its percentile rank against a fixed background of approximately 350,000 common human SNPs.",
-    "RNA_SEQ": "Measures gene expression levels. High scores indicate increased transcription; low scores indicate decreased transcription. Variants here may affect promoter activity, exon inclusion, or mRNA stability.",
-    "CAGE": "Cap Analysis Gene Expression: Identifies transcription start sites (TSSs). High scores indicate active promoters. Variants may disrupt promoter motifs or create new TSSs.",
-    "PROCAP": "Promoter Capture-C: Maps promoter interactions with other genomic regions (e.g., enhancers). High scores indicate strong promoter contacts. Variants may disrupt long-range regulatory loops.",
-    "ATAC": "Assay for Transposase-Accessible Chromatin: Measures chromatin accessibility. High scores indicate open chromatin (active regulatory regions). Variants may close or open chromatin, affecting TF binding.",
-    "DNASE": "DNase-seq: Measures chromatin accessibility via DNase I sensitivity. Similar to ATAC, high scores indicate active regulatory regions (promoters, enhancers). Variants may alter accessibility for transcription factors.",
-    "CHIP_HISTONE": "Chromatin Immunoprecipitation for histone modifications (e.g., H3K27ac, H3K4me3). High scores indicate active enhancers/promoters (H3K27ac) or active transcription (H3K4me3). Variants may disrupt histone binding or recruitment of chromatin modifiers.",
-    "CHIP_TF": "Chromatin Immunoprecipitation for transcription factors. High scores indicate TF binding sites. Variants may abolish or create TF binding motifs, directly affecting gene regulation.",
-    "POLYADENYLATION": "Identifies polyadenylation sites (PAS), where mRNA transcription terminates. High scores indicate active PAS. Variants may cause alternative polyadenylation, affecting mRNA stability or localization.",
-    "SPLICE_SITES": "Predicts splice donor/acceptor sites. High scores indicate strong splice sites. Variants may disrupt splicing, leading to exon skipping or cryptic splice site usage.",
-    "SPLICE_SITE_USAGE": "Quantifies the usage of splice sites. High scores indicate frequent splicing at this site. Variants may reduce usage, causing aberrant splicing or intron retention.",
-    "SPLICE_JUNCTIONS": "Measures splicing between exons. High scores indicate strong exon-exon junctions. Variants may disrupt junctions, leading to mis-splicing or novel isoforms.",
-    "CONTACT_MAPS": "Differential contact maps (ALT vs REF) highlight predicted changes in chromatin interactions caused by the variant. Positive values indicate increased contact strength in the alternate allele, while negative values indicate decreased contact strength.",
-}
+EXCLUDED_VISUALIZATION_TRACKS: list[str] = []
 
 
 # ---------------------------------------------------------------------------
@@ -128,25 +124,43 @@ def get_organisms() -> list[dict[str, str]]:
     ]
 
 
-def get_track_explanations() -> dict[str, str]:
-    return TRACK_EXPLANATIONS.copy()
-
-
 @lru_cache(maxsize=1)
 def get_hpo_lookup() -> dict[str, Any]:
     with open(RESOURCES_DIR / "hp_info_gene.json", "r", encoding="utf-8") as handle:
         return json.load(handle)
 
 
-def get_hpo_terms() -> list[str]:
-    return sorted(get_hpo_lookup().keys())
+def get_hpo_terms() -> list[dict[str, str]]:
+    lookup = get_hpo_lookup()
+    return [
+        {"term": term, "definition": lookup.get(term, {}).get("definition") or ""}
+        for term in sorted(lookup.keys())
+    ]
 
 
-def get_available_scorers(organism_label: str) -> list[str]:
-    scorers = SCORER_SELECTION_CHOICES.copy()
-    if "mouse" in organism_label.lower():
-        scorers = [scorer for scorer in scorers if scorer.lower() != "polyadenylation"]
-    return scorers
+def get_available_scorers(organism: Any, available_tracks: Iterable[str]) -> list[str]:
+    resolved = resolve_organism(organism)
+    track_names = set(available_tracks)
+
+    available: list[str] = []
+    for name in SCORER_SELECTION_CHOICES:
+        scorer = variant_scorers.RECOMMENDED_VARIANT_SCORERS.get(name.upper())
+        if scorer is None:
+            continue
+
+        supported = variant_scorers.SUPPORTED_ORGANISMS.get(scorer.base_variant_scorer, ())
+        if resolved.value not in supported:
+            continue
+
+        requested_output = getattr(scorer, "requested_output", None)
+        if requested_output is not None:
+            output_type_name = str(requested_output).split(".")[-1]
+            if output_type_name not in track_names:
+                continue
+
+        available.append(name)
+
+    return available
 
 
 def _organism_cache_key(organism: Any) -> str:
@@ -188,7 +202,10 @@ def load_tracks(api_key: str, organism: Any) -> dict[str, tuple[Any, str]]:
         attr_name = clean_name.lower()
         track_map[clean_name] = (output_type, attr_name)
 
-    return track_map
+    order = {name: index for index, name in enumerate(SCORER_SELECTION_CHOICES)}
+    return dict(
+        sorted(track_map.items(), key=lambda item: order.get(item[0], len(order)))
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -243,10 +260,24 @@ class NormalizedVariantResult:
     actual_ref: str | None = None
 
 
+_UPSTREAM_TRANSPORT_ERROR_RE = re.compile(
+    r"Server Error|Client Error|Connection|Timeout|Max retries exceeded",
+    re.IGNORECASE,
+)
+
+
+def _is_upstream_transport_error(message: str) -> bool:
+    """True if a resolve_variant error came from Ensembl/VariantValidator being
+    unreachable (5xx, timeout, connection failure) rather than a bad variant."""
+    return bool(_UPSTREAM_TRANSPORT_ERROR_RE.search(message))
+
+
 def normalize_variant_str(variant_str: str, organism_label: str) -> NormalizedVariantResult:
     resolution = resolve_variant(variant_str, organism_label)
     # Hard errors still raise; a reference mismatch is flagged for confirmation.
     if resolution.error:
+        if _is_upstream_transport_error(resolution.error):
+            raise UpstreamServiceError(resolution.error)
         raise InvalidVariantError(resolution.error)
     if not resolution.normalized:
         raise InvalidVariantError("Variant normalization returned no result.")
@@ -347,17 +378,31 @@ def score_variant(
     if df_scores is None or df_scores.empty:
         raise NoVariantResultsError("No variant results")
 
+    if "variant_scorer" in df_scores.columns:
+        is_polyadenylation = df_scores["variant_scorer"].str.startswith(
+            "PolyadenylationScorer"
+        )
+        df_scores.loc[is_polyadenylation, "output_type"] = "Polyadenylation"
+
     dropped_columns = [
         column
         for column in ["variant_id", "scored_interval"]
         if column in df_scores.columns
     ]
 
-    result_df = df_scores.sort_values("raw_score", key=abs, ascending=False)
+    sort_column = default_sort_column(df_scores)
+    result_df = df_scores.sort_values(sort_column, key=abs, ascending=False)
     if dropped_columns:
         result_df = result_df.drop(columns=dropped_columns)
 
     return result_df
+
+
+def default_sort_column(df_scores: pd.DataFrame) -> str:
+    # quantile_score is comparable across scorers/track types (percentile rank
+    # against a common background); raw_score is not, since its units differ
+    # per scorer. Only fall back to raw_score if no scorer produced quantiles.
+    return "quantile_score" if "quantile_score" in df_scores.columns else "raw_score"
 
 
 def apply_hpo_relevance(
@@ -381,8 +426,10 @@ def apply_hpo_relevance(
         ranked_scores["gene_name"].isin(relevant_genes).astype(int)
     )
 
+    sort_column = default_sort_column(ranked_scores)
     return ranked_scores.sort_values(
-        ["hpo_gene_relevance", "raw_score"],
+        ["hpo_gene_relevance", sort_column],
+        key=abs,
         ascending=[False, False],
     )
 
@@ -399,10 +446,13 @@ def dataframe_to_rows(df_scores: pd.DataFrame) -> list[dict[str, Any]]:
 
 _CONTINUOUS_EXCLUDED = {
     "SPLICE_JUNCTIONS",
-    "SPLICE_SITES",
-    "SPLICE_SITE_USAGE",
     "CONTACT_MAPS",
 }
+
+
+def _skip(track_name: str, reason_code: str, message: str) -> dict[str, str]:
+    """Build a structured skip diagnostic for a track that yielded no plottable data."""
+    return {"track": track_name, "reason_code": reason_code, "message": message}
 
 
 def _metadata_to_dict(metadata: Any) -> dict[str, Any]:
@@ -484,23 +534,59 @@ def build_track_payload(
     interval_length: int,
     interval: Any,
     transcript_extractor: Any,
+    skipped: list[dict[str, str]] | None = None,
 ) -> dict[str, Any]:
-    """Extract JSON-serializable data for frontend plotting."""
+    """Extract JSON-serializable data for frontend plotting.
+
+    `skipped` seeds the diagnostics list with skips already known to the
+    caller (e.g. tracks unavailable for the organism); this function appends
+    to it for every requested track that ends up with no plottable data.
+    """
     tracks_payload: list[dict[str, Any]] = []
+    skipped = list(skipped) if skipped else []
 
     for track_name in selected_tracks:
         track_info = track_map.get(track_name)
         if not track_info:
+            skipped.append(
+                _skip(track_name, "track_unavailable", f"{track_name} is not offered by this organism/model.")
+            )
             continue
         attr = track_info[1]
         ref_data = getattr(outputs.reference, attr, None)
         alt_data = getattr(outputs.alternate, attr, None)
         if ref_data is None or alt_data is None:
+            if track_name == "CONTACT_MAPS":
+                skipped.append(
+                    _skip(
+                        track_name,
+                        "contact_map_ontology_mismatch",
+                        "No contact map data was returned for the selected ontology term(s); "
+                        "contact maps use a separate cell-line ontology that may not overlap your tissue selection.",
+                    )
+                )
+            else:
+                skipped.append(
+                    _skip(
+                        track_name,
+                        "no_output_data",
+                        f"AlphaGenome returned no {track_name} data for this interval and sequence length.",
+                    )
+                )
             continue
 
         if track_name not in _CONTINUOUS_EXCLUDED:
             ref_values = ref_data.values
             alt_values = alt_data.values
+            if ref_values.shape[1] == 0:
+                skipped.append(
+                    _skip(
+                        track_name,
+                        "track_tissue_mismatch",
+                        f"No {track_name} data is available for the selected tissue(s).",
+                    )
+                )
+                continue
             ref_interval_start = int(ref_data.interval.start)
             for i in range(ref_values.shape[1]):
                 metadata = ref_data.metadata.iloc[i]
@@ -515,6 +601,16 @@ def build_track_payload(
                     }
                 )
         elif track_name == "SPLICE_JUNCTIONS":
+            if ref_data.values.shape[1] == 0:
+                skipped.append(
+                    _skip(
+                        track_name,
+                        "track_tissue_mismatch",
+                        f"No {track_name} data is available for the selected tissue(s).",
+                    )
+                )
+                continue
+
             ref_junctions = getattr(ref_data, "junctions", [])
             alt_junctions = getattr(alt_data, "junctions", [])
             ref_shape = getattr(ref_junctions, "shape", None)
@@ -522,6 +618,13 @@ def build_track_payload(
             has_ref = ref_shape is not None and ref_shape[0] > 0
             has_alt = alt_shape is not None and alt_shape[0] > 0
             if not has_ref and not has_alt:
+                skipped.append(
+                    _skip(
+                        track_name,
+                        "empty_splice_junctions",
+                        "No splice junctions were predicted in this variant's window.",
+                    )
+                )
                 continue
 
             ref_counts = list(getattr(ref_data, "values", []))
@@ -541,6 +644,16 @@ def build_track_payload(
         elif track_name == "CONTACT_MAPS":
             ref_values = ref_data.values
             alt_values = alt_data.values
+            if ref_values.shape[2] == 0:
+                skipped.append(
+                    _skip(
+                        track_name,
+                        "contact_map_ontology_mismatch",
+                        "No contact map data was returned for the selected ontology term(s); "
+                        "contact maps use a separate cell-line ontology that may not overlap your tissue selection.",
+                    )
+                )
+                continue
             for i in range(ref_values.shape[2]):
                 metadata = ref_data.metadata.iloc[i]
                 contact_diff = (alt_values[:, :, i] - ref_values[:, :, i]).astype(float)
@@ -561,7 +674,12 @@ def build_track_payload(
                 )
 
     if not tracks_payload:
-        raise InvalidRequestError("No valid tracks to plot.")
+        summary = (
+            skipped[0]["message"]
+            if len(skipped) == 1
+            else "No data was returned for any of the selected track(s)."
+        )
+        raise NoTrackDataError(summary, details=skipped)
 
     transcripts = (
         transcript_extractor.extract(interval) if transcript_extractor else []
@@ -582,6 +700,7 @@ def build_track_payload(
         },
         "tracks": tracks_payload,
         "transcripts": _extract_transcripts(transcripts),
+        "warnings": skipped,
     }
 
 
@@ -600,13 +719,35 @@ def predict_and_build_track_payload(
     if not selected_tracks:
         raise InvalidRequestError("Select at least one track.")
 
+    # A track selected under a different organism (e.g. stale frontend state
+    # after switching organism) won't exist in this organism's track_map.
+    # Drop those upfront rather than letting the KeyError below surface as an
+    # opaque failure once every requested track is invalid.
+    skipped: list[dict[str, str]] = []
+    available_tracks: list[str] = []
+    for track_name in selected_tracks:
+        if track_name in track_map:
+            available_tracks.append(track_name)
+        else:
+            skipped.append(
+                _skip(track_name, "track_unavailable", f"{track_name} is not offered by this organism/model.")
+            )
+
+    if not available_tracks:
+        summary = (
+            skipped[0]["message"]
+            if len(skipped) == 1
+            else "None of the selected tracks are available for this organism."
+        )
+        raise NoTrackDataError(summary, details=skipped)
+
     interval, variant_obj = parse_variant_interval(variant_str, sequence_length)
 
-    # Contact maps use cell-line-scoped ontology (EFO) that does not overlap
-    # the user-selected tissue ontology terms; filtering by ontology_terms
-    # returns zero contact-map tracks. Request contact maps unfiltered.
-    contact_tracks = [t for t in selected_tracks if t == "CONTACT_MAPS"]
-    other_tracks = [t for t in selected_tracks if t != "CONTACT_MAPS"]
+    # Contact maps are requested separately so the correct cell-line-scoped
+    # ontology term is applied and shown to the user, rather than falling
+    # back to an unfiltered/arbitrary cell line.
+    contact_tracks = [t for t in available_tracks if t == "CONTACT_MAPS"]
+    other_tracks = [t for t in available_tracks if t != "CONTACT_MAPS"]
 
     try:
         outputs = None
@@ -624,7 +765,7 @@ def predict_and_build_track_payload(
                 interval=interval,
                 variant=variant_obj,
                 organism=organism,
-                ontology_terms=None,
+                ontology_terms=ontology_terms,
                 requested_outputs=[track_map[track][0] for track in contact_tracks],
             )
             if outputs is None:
@@ -641,17 +782,16 @@ def predict_and_build_track_payload(
                         contact_maps=contact_outputs.alternate.contact_maps,
                     ),
                 )
-    except KeyError as exc:
-        raise InvalidRequestError(f"Unknown track selection: {exc}") from exc
     except Exception as exc:
         raise UpstreamServiceError("Could not generate track predictions.") from exc
 
     return build_track_payload(
         outputs=outputs,
         variant=variant_obj,
-        selected_tracks=selected_tracks,
+        selected_tracks=available_tracks,
         track_map=track_map,
         interval_length=sequence_length,
         interval=interval,
         transcript_extractor=transcript_extractor,
+        skipped=skipped,
     )

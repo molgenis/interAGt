@@ -1,33 +1,43 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 150">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 160" role="img" aria-labelledby="logo-title">
+  <title id="logo-title">interAGt logo</title>
+
+#a855f7
+#ec4899
   <defs>
-    <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#FF0C57;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#017FFD;stop-opacity:1" />
+    <linearGradient id="brand-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0ea5e9" stop-opacity="1" />
+      <stop offset="50%" stop-color="#a855f7" stop-opacity="1" />
+      <stop offset="100%" stop-color="#ec4899" stop-opacity="1" />
+    </linearGradient>
+    <linearGradient id="ag-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="25%" stop-color="#ec4899" stop-opacity="1" />
+      <stop offset="60%" stop-color="#a855f7" stop-opacity="1" />
+      <stop offset="100%" stop-color="#0ea5e9" stop-opacity="1" />
     </linearGradient>
   </defs>
 
+  <g id="dna-graphic" transform="translate(0,15) scale(1)">
+    <path id="dna-strand" d="M55,65 Q75,40 100,40 T140,110 T180,75 T220,45"
+          stroke="url(#brand-gradient)" stroke-width="3" fill="none" stroke-linecap="round" />
+  </g>
 
-<text x="150" y="95" font-family="'PT Sans', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif"
-      font-size="48" font-weight="600" fill="#9f9f9fff">
-  inter<tspan fill="#6a6a6aff" opacity="0.9" font-weight="700">AG</tspan>t
-</text>
-  
-  <!-- Single DNA strand (wavy line) -->
-  <path d="M50,75 Q75,40 100,40 T140,110 T180,75 T220,40" 
-        stroke="url(#gradient)" stroke-width="3" fill="none" stroke-linecap="round"/>
-  
-  <!-- Scatter plot points -->
-  <circle cx="50" cy="75" r="12" fill="url(#gradient)" opacity="0.9"/>
-  <circle cx="100" cy="40" r="8" fill="url(#gradient)" opacity="0.9"/>
-  <circle cx="140" cy="110" r="10" fill="url(#gradient)" opacity="0.9"/>
-  <circle cx="156" cy="60" r="8" fill="url(#gradient)" opacity="0.9"/>
-  <circle cx="220" cy="40" r="12" fill="url(#gradient)" opacity="0.9"/>
-  
-  <!-- Connecting dotted lines -->
-  <line x1="50" y1="75" x2="100" y2="40" stroke="#E0E0E0" stroke-width="1" stroke-dasharray="3,2"/>
-  <line x1="100" y1="40" x2="140" y2="110" stroke="#E0E0E0" stroke-width="1" stroke-dasharray="3,2"/>
-  <line x1="140" y1="110" x2="180" y2="75" stroke="#E0E0E0" stroke-width="1" stroke-dasharray="3,2"/>
-  <line x1="180" y1="75" x2="220" y2="40" stroke="#E0E0E0" stroke-width="1" stroke-dasharray="3,2"/>
-  
-  
+  <g id="wordmark">
+    <line id="wordmark-axis-y" x1="55" y1="35" x2="55" y2="110"
+          stroke="#8f8f8f" stroke-width="2" stroke-dasharray="6,6" stroke-linecap="round" opacity="0.6" />
+    <text x="95" y="95"
+          font-family="'PT Sans', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif"
+          font-size="54" font-weight="600" fill="#8f8f8fff"><tspan id="wordmark-i">i</tspan>nter<tspan id="wordmark-ag" fill="url(#ag-gradient)" opacity="1" font-weight="700">AG</tspan>t</text>
+    <line id="wordmark-axis-x" x1="50" y1="105" x2="300" y2="105"
+          stroke="#8f8f8f" stroke-width="2" stroke-dasharray="6,6" stroke-linecap="round" opacity="0.6" />
+  </g>
+
+  <g id="dna-graphic" transform="translate(0,15) scale(1)">
+    <g id="scatter-points">
+      <circle id="scatter-point-1" cx="50" cy="75" r="12" fill="url(#brand-gradient)" opacity="0.9" />
+      <circle id="scatter-point-2" cx="102" cy="42" r="8" fill="url(#brand-gradient)" opacity="1" />
+      <circle id="scatter-point-3" cx="155" cy="135" r="10" fill="url(#brand-gradient)" opacity="0.9" />
+      <circle id="scatter-point-4" cx="205" cy="10" r="13" fill="url(#brand-gradient)" opacity="0.9" />
+    </g>
+  </g>
+
 </svg>

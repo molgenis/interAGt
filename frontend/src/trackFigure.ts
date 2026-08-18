@@ -7,7 +7,7 @@ import type {
   TrackPlotResponse,
   TrackSpec,
 } from '@/api'
-import { buildTranscriptObjects, CDS_HEIGHT, TRACK_SPACING } from '@/transcriptFigure'
+import { buildTranscriptObjects, TRACK_SPACING, TRACK_PAD } from '@/transcriptFigure'
 import { plotTheme, themedAxis, themedLayout, themedHoverLabel, type PlotTheme } from '@/plotly'
 
 const REF_COLOR = '#999'
@@ -55,6 +55,7 @@ function lineTrace(
     x,
     y,
     name,
+    legendgroup: name,
     line: { color, width: 1.5 },
     showlegend,
     hovertemplate: 'Position: %{x}<br>Value: %{y:.2f}<extra></extra>',
@@ -173,7 +174,15 @@ function buildContactMapTrace(spec: ContactMapTrack, row: number): unknown {
     z: spec.z,
     x: spec.coords,
     y: spec.coords,
-    colorscale: 'RdBu',
+    colorscale:  [
+      [0, 'rgba(255, 12, 87, 1)'],
+      [0.4, 'rgba(255, 12, 87, 0.46)'],  
+      [0.499, 'rgba(255, 12, 87, 0.01)'], 
+      [0.5, 'rgba(0, 0, 0, 0)'],    
+      [0.501, 'rgba(1, 127, 253, 0.01)'],
+      [0.6, 'rgba(1, 127, 253, 0.46)'],
+      [1, 'rgba(1, 127, 253, 1)'],
+      ],
     zmid: 0,
     zmin: -maxAbs,
     zmax: maxAbs,
@@ -181,6 +190,23 @@ function buildContactMapTrace(spec: ContactMapTrack, row: number): unknown {
     xaxis: xRef(row),
     yaxis: yRef(row),
   }
+}
+
+// --- Domains for controlling subplot height 
+function makeDomains(weights: number[]) {
+  const total = weights.reduce((a, b) => a + b, 0)
+  const gap = 0.02
+
+  let top = 1
+
+  return weights.map((w) => {
+    const h = (w / total) * (1 - gap * (weights.length - 1))
+    const domain: [number, number] = [top - h, top]
+
+    top = top - h - gap
+
+    return domain
+  })
 }
 
 // --- Axis configuration helpers ---
@@ -222,8 +248,13 @@ function makeYAxis(
   if (spec.type === 'sashimi') {
     cfg.showticklabels = false
   }
+  if (spec.type === 'contact_map') {
+    cfg.autorange = 'reversed'
+  }
   return cfg
 }
+
+
 
 // --- Main entry point ---
 
@@ -237,12 +268,9 @@ export function buildTrackFigure(
   const nSubplots = tracks.length + 1
   const transcriptRow = nSubplots
 
-  const rowHeights = tracks.map((t) =>
-    t.type === 'contact_map' ? 8 : t.type === 'sashimi' ? 2 : 1,
+  const rowHeights: number[] = tracks.map((t) =>
+    t.type === 'contact_map' ? 6 : t.type === 'sashimi' ? 2 : 1,
   )
-  rowHeights.push(2)
-
-  const totalHeight = rowHeights.reduce((a, b) => a + b, 0)
   const xRange: [number, number] = [interval.start, interval.end]
 
   const data: unknown[] = []
@@ -250,12 +278,14 @@ export function buildTrackFigure(
   const annotations: unknown[] = []
 
   // Build track objects
+  let shownContinuousLegend = false
   for (let idx = 0; idx < tracks.length; idx++) {
     const spec = tracks[idx]
     const row = idx + 1
 
     if (spec.type === 'continuous') {
-      data.push(...buildContinuousTraces(spec, row, idx === 0))
+      data.push(...buildContinuousTraces(spec, row, !shownContinuousLegend))
+      shownContinuousLegend = true
     } else if (spec.type === 'sashimi') {
       const result = buildSashimiObjects(spec, row, theme)
       shapes.push(...result.shapes)
@@ -279,37 +309,48 @@ export function buildTrackFigure(
     annotations.push(...tx.annotations)
     nLanes = tx.nLanes
   }
+  rowHeights[transcriptRow - 1] = Math.max(1, (nLanes - 1) * TRACK_SPACING + 2 * TRACK_PAD)
+  const totalHeight = rowHeights.reduce((a, b) => a + b, 0)
 
   // Configure axes
   const layout: Record<string, unknown> = themedLayout(theme, {
     height: 500 + 120 * totalHeight,
     hovermode: 'x unified',
-    legend: { orientation: 'h', yanchor: 'bottom', y: 1.02, xanchor: 'right', x: 1 },
+    legend: {
+      orientation: 'h',
+      yanchor: 'bottom',
+      y: 1.02,
+      xanchor: 'right',
+      x: 1,
+      title: { text: 'Click to toggle:', side: 'left', font: { size: 11, color: theme.muted } },
+    },
     shapes,
     annotations,
     hoverlabel: themedHoverLabel(theme),
     margin: { l: 60, r: 30, t: 40, b: 60 },
-    grid: {
-      rows: nSubplots,
-      columns: 1,
-      pattern: 'independent',
-      roworder: 'top to bottom',
-    },
-    row_heights: rowHeights,
-    vertical_spacing: 5 / ( 500 + 120 * totalHeight),
+  
   })
 
+  const domains = makeDomains(rowHeights)
+
   for (let row = 1; row <= nSubplots; row++) {
-    layout[xKey(row)] = makeXAxis(
+    const xAxis = makeXAxis(
       row,
       xRange,
       row === nSubplots,
       theme,
       row <= tracks.length ? tracks[row - 1] : undefined,
     )
+    if (row === transcriptRow && transcripts?.length) {
+      xAxis.title = { text: 'Transcripts', standoff: 10 }
+    }
+    layout[xKey(row)] = xAxis
 
     if (row <= tracks.length) {
-      layout[yKey(row)] = makeYAxis(row, theme, tracks[row - 1])
+      layout[yKey(row)] = {
+        ...makeYAxis(row, theme, tracks[row - 1]),
+        domain: domains[row - 1],
+      }
     } else if (row === transcriptRow && transcripts?.length) {
       layout[yKey(row)] = {
         ...themedAxis(theme),
@@ -317,10 +358,14 @@ export function buildTrackFigure(
         fixedrange: true,
         showticklabels: false,
         title: { text: '' },
-        range: [-nLanes * TRACK_SPACING, CDS_HEIGHT + 0.8],
+        range: [-(nLanes - 1) * TRACK_SPACING - TRACK_PAD, TRACK_PAD],
+        domain: domains[row - 1],
       }
     } else {
-      layout[yKey(row)] = makeYAxis(row, theme)
+      layout[yKey(row)] = {
+        ...makeYAxis(row, theme),
+        domain: domains[row - 1],
+      }
     }
   }
 
