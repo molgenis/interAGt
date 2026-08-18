@@ -25,6 +25,8 @@
     --input: 214.3 31.8% 91.4%;
     --ring: 221.2 83.2% 53.3%;
     --radius: 0.5rem;
+    --scrollbar-thumb: 215 16.3% 75%;
+    --scrollbar-track: 210 40% 90%; 
   }
 
   .dark {
@@ -47,6 +49,8 @@
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
     --ring: 224.3 76.3% 48%;
+    --scrollbar-thumb: 215 20.2% 40%;
+    --scrollbar-track: 217.2 32.6% 17.5%;
   }
 }
 
@@ -74,4 +78,28 @@ details:not([open]) summary .details-tabs {
   summary .details-tabs {
     display: none;
   }
+}
+
+
+/* Custom CSS for scrollbar */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+::-webkit-scrollbar-track {
+  background: hsl(var(--scrollbar-track));
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--scrollbar-thumb));
+  border-radius: 6px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--scrollbar-thumb-hover, var(--scrollbar-thumb)));
+}
+
+html {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--scrollbar-thumb)) hsl(var(--scrollbar-track));
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: auto;
 }
