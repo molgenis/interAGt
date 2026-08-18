@@ -84,6 +84,11 @@ export function ScoresTable({
   const virtualRows = rowVirtualizer.getVirtualItems()
   const totalSize = rowVirtualizer.getTotalSize()
 
+  const gridTemplateColumns = useMemo(
+    () => `repeat(${columns.length}, minmax(150px, 1fr))`,
+    [columns.length],
+  )
+
   if (rows.length === 0) return null
 
   function toggleColumn(col: string, checked: boolean) {
@@ -94,11 +99,6 @@ export function ScoresTable({
       return next
     })
   }
-
-  const gridTemplateColumns = useMemo(
-  () => `repeat(${columns.length}, minmax(150px, 1fr))`,
-  [columns.length],
-)
 
   return (
     <div className="space-y-2">
