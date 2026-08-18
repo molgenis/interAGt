@@ -46,6 +46,15 @@ const FAQ_ITEMS = [
     ],
   },
   {
+    question:
+      'The gene annotation row is missing from my track plot, with an amber warning - what happened?',
+    answer: [
+      "Track plots normally include a gene/transcript annotation row alongside the AlphaGenome signal tracks. That row is built from a GENCODE annotation file; if it isn't bundled locally, the app fetches it from Google Cloud Storage.",
+      "If that fetch fails - most often a transient Google Cloud Storage outage - the app skips just the annotation row and still renders every signal track (RNA-seq, ATAC, etc.), since those come directly from AlphaGenome's own API and never depend on the annotation file. You'll see a dismissible warning banner explaining the row couldn't be loaded, rather than a silent gap or a failed request.",
+      'No action needed - retry later if you want the gene-model overlay back once the outage clears.',
+    ],
+  },
+  {
     question: 'Do HPO phenotype terms and UBERON/CL/CLO/EFO tissue terms interact?',
     answer: [
       "No, they're independent and don't reference each other.",

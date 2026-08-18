@@ -130,6 +130,32 @@ function WarningsNote({
   )
 }
 
+function TranscriptWarningNote({
+  message,
+  onDismiss,
+}: {
+  message: string
+  onDismiss: () => void
+}) {
+  return (
+    <div
+      role="alert"
+      className="relative rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 pr-8 text-sm text-amber-700 dark:text-amber-500"
+    >
+      <button
+        type="button"
+        onClick={onDismiss}
+        aria-label="Dismiss"
+        className="absolute right-2 top-2 rounded-sm opacity-70 hover:opacity-100"
+      >
+        <X className="size-4" />
+      </button>
+      <div className="font-medium">Gene annotation row unavailable</div>
+      <p className="mt-0.5 text-xs">{message}</p>
+    </div>
+  )
+}
+
 function MouseAnnotationWarning() {
   return (
     <div
@@ -186,6 +212,7 @@ export default function App() {
   const [selectedTracks, setSelectedTracks] = useState<string[]>([])
   const [pendingAction, setPendingAction] = useState<Mode | null>(null)
   const [warningsDismissed, setWarningsDismissed] = useState(false)
+  const [transcriptWarningDismissed, setTranscriptWarningDismissed] = useState(false)
 
   const organismsQuery = useOrganisms()
   const organisms = organismsQuery.data?.organisms ?? []
@@ -232,7 +259,10 @@ export default function App() {
   }, [tracksQuery.data])
 
   useEffect(() => {
-    if (trackPlotMutation.data) setWarningsDismissed(false)
+    if (trackPlotMutation.data) {
+      setWarningsDismissed(false)
+      setTranscriptWarningDismissed(false)
+    }
   }, [trackPlotMutation.data])
 
   useEffect(() => {
@@ -683,6 +713,12 @@ export default function App() {
           ) : trackPayload ? (
             <div className="space-y-4">
               {!isHuman && <MouseAnnotationWarning />}
+              {!transcriptWarningDismissed && trackPayload.transcript_warning && (
+                <TranscriptWarningNote
+                  message={trackPayload.transcript_warning}
+                  onDismiss={() => setTranscriptWarningDismissed(true)}
+                />
+              )}
               {!warningsDismissed && trackPayload.warnings.length > 0 && (
                 <WarningsNote
                   warnings={trackPayload.warnings}

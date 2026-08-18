@@ -1,9 +1,12 @@
 """HTTP routers for the backend API."""
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter
 
 from backend import services
+from backend.core import UpstreamServiceError
 from backend.schemas import (
     HpoTermsResponse,
     NormalizeRequest,
@@ -19,6 +22,8 @@ from backend.schemas import (
     TracksResponse,
     VariantConfirmation,
 )
+
+LOGGER = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -152,9 +157,19 @@ def tracks_plot(payload: TracksPlotRequest) -> dict:
     organism_label = services.get_organism_label(payload.organism)
 
     track_map = services.load_tracks(payload.api_key, payload.organism)
-    transcript_extractor = services.load_transcripts(organism_label)
 
-    return services.predict_and_build_track_payload(
+    transcript_warning: str | None = None
+    try:
+        transcript_extractor = services.load_transcripts(organism_label)
+    except UpstreamServiceError:
+        LOGGER.warning("transcript_load_failed organism=%s", organism_label, exc_info=True)
+        transcript_extractor = None
+        transcript_warning = (
+            "Gene annotation track could not be loaded (upstream storage outage). "
+            "Signal tracks below are unaffected."
+        )
+
+    result = services.predict_and_build_track_payload(
         model=model,
         organism=organism,
         variant_str=payload.variant,
@@ -164,3 +179,5 @@ def tracks_plot(payload: TracksPlotRequest) -> dict:
         track_map=track_map,
         transcript_extractor=transcript_extractor,
     )
+    result["transcript_warning"] = transcript_warning
+    return result

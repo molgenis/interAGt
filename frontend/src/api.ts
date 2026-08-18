@@ -153,6 +153,7 @@ export interface TrackPlotResponse {
   tracks: TrackSpec[]
   transcripts: TranscriptSpec[]
   warnings: TrackIssue[]
+  transcript_warning: string | null
 }
 
 interface ApiErrorBody {

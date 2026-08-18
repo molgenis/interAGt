@@ -135,3 +135,4 @@ class TracksPlotResponse(BaseModel):
     tracks: list[dict[str, Any]]
     transcripts: list[dict[str, Any]]
     warnings: list[dict[str, Any]] = Field(default_factory=list)
+    transcript_warning: str | None = None
