@@ -127,37 +127,42 @@ function aggregateByCategory(rows: ScoreRow[], identity: string[]): AggBar[] {
   return bars
 }
 
-type Panel = { title: string; bars: AggBar[] }
+type Panel = { title: string; bars: AggBar[]; yRange: [number, number] }
 
-function buildPanels(rows: ScoreRow[], spec: ChartSpec, outputType: string): Panel[] {
-  if (!spec.facet) {
-    return [{ title: `Variant Effect: ${outputType}`, bars: aggregateByCategory(rows, spec.identity) }]
-  }
-  const groups = groupBy(rows, (row) => String(row[spec.facet!] ?? '—'))
-  return [...groups.entries()].map(([name, groupRows]) => ({
-    title: spec.facet === 'track_strand' ? `strand ${name}` : name,
-    bars: aggregateByCategory(groupRows, spec.identity),
-  }))
-}
-
-function sharedRange(panels: Panel[]): [number, number] {
+/** Floors the range at ±0.2 so small effects don't visually dwarf-scale into looking huge;
+ * beyond that, hugs the panel's own data with no extra padding. Computed per panel (not shared
+ * across a section's facets) so one outlier facet doesn't flatten every other facet's bars. */
+function panelRange(bars: AggBar[]): [number, number] {
   let min = Infinity
   let max = -Infinity
-  for (const panel of panels) {
-    for (const bar of panel.bars) {
-      if (bar.min < min) min = bar.min
-      if (bar.max > max) max = bar.max
-    }
+  for (const bar of bars) {
+    if (bar.min < min) min = bar.min
+    if (bar.max > max) max = bar.max
   }
   if (!Number.isFinite(min) || !Number.isFinite(max)) return [-0.2, 0.2]
   return [Math.min(min, -0.2), Math.max(max, 0.2)]
+}
+
+function buildPanels(rows: ScoreRow[], spec: ChartSpec, outputType: string): Panel[] {
+  if (!spec.facet) {
+    const bars = aggregateByCategory(rows, spec.identity)
+    return [{ title: `Variant Effect: ${outputType}`, bars, yRange: panelRange(bars) }]
+  }
+  const groups = groupBy(rows, (row) => String(row[spec.facet!] ?? '—'))
+  return [...groups.entries()].map(([name, groupRows]) => {
+    const bars = aggregateByCategory(groupRows, spec.identity)
+    return {
+      title: spec.facet === 'track_strand' ? `strand ${name}` : name,
+      bars,
+      yRange: panelRange(bars),
+    }
+  })
 }
 
 type Section = {
   outputType: string
   spec: ChartSpec
   panels: Panel[]
-  yRange: [number, number]
   hasAggregation: boolean
 }
 
@@ -171,9 +176,8 @@ function computeSections(rows: ScoreRow[], outputTypes: string[]): Section[] {
       if (filtered.length === 0) return null
       const spec = CHART_SPEC[outputType] ?? DEFAULT_CHART_SPEC
       const panels = buildPanels(filtered, spec, outputType)
-      const yRange = sharedRange(panels)
       const hasAggregation = panels.some((p) => p.bars.some((b) => b.n > 1))
-      return { outputType, spec, panels, yRange, hasAggregation }
+      return { outputType, spec, panels, hasAggregation }
     })
     .filter((s): s is NonNullable<typeof s> => s !== null)
 }
@@ -390,7 +394,7 @@ function renderScoresSummaryHtml(
 
       const panelsHtml = section.panels
         .map((panel) => {
-          const figure = buildBarPanelFigure(theme, panel.title, panel.bars, section.yRange, displayMode)
+          const figure = buildBarPanelFigure(theme, panel.title, panel.bars, panel.yRange, displayMode)
           const id = `plot-${plotIndex++}`
           scripts.push(
             `Plotly.newPlot(${JSON.stringify(id)}, ${JSON.stringify(figure.data)}, ${JSON.stringify(figure.layout)}, {displaylogo:false, responsive:true});`,
@@ -527,7 +531,7 @@ export function ScoresSummaryCharts({
         />
       </div>
       <div className="space-y-8">
-      {sections.map(({ outputType, spec, panels, yRange, hasAggregation, showModeControl }) => {
+      {sections.map(({ outputType, spec, panels, hasAggregation, showModeControl }) => {
         const displayMode = displayModes[outputType] ?? 'maxAbs'
         const searchQuery = searchQueries[outputType] || ''
         const visibleCount = visiblePanelCounts[outputType] || MAX_PANELS
@@ -615,7 +619,7 @@ export function ScoresSummaryCharts({
                             key={panel.title}
                             title={panel.title}
                             bars={panel.bars}
-                            yRange={yRange}
+                            yRange={panel.yRange}
                             isDark={isDark}
                             displayMode={displayMode}
                           />
@@ -660,7 +664,7 @@ export function ScoresSummaryCharts({
                 <BarPanel
                   title={panels[0].title}
                   bars={panels[0].bars}
-                  yRange={yRange}
+                  yRange={panels[0].yRange}
                   isDark={isDark}
                   displayMode={displayMode}
                 />
