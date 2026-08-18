@@ -1,26 +1,14 @@
-import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
+import { useEffect, useMemo, useRef, useCallback } from 'react'
+import type { Dispatch, SetStateAction } from 'react'
 import { Columns3, Download } from 'lucide-react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { ScoreRow } from '@/api'
-import { COLUMN_EXPLANATIONS } from '@/trackExplanations'
+import { COLUMN_EXPLANATIONS, PREFERRED_COLUMNS } from '@/trackExplanations'
 import { downloadAsCSV } from '@/DownloadScores'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/ui/tooltip'
 import { Popover, PopoverContent, PopoverTrigger } from '@/ui/popover'
 import { Checkbox } from '@/ui/checkbox'
 import { Button } from '@/ui/button'
-
-const PREFERRED_COLUMNS = [
-  'output_type',
-  'gene_name',
-  'gene_id',
-  'biosample_name',
-  'transcription_factor',
-  'histone_mark',
-  'track_strand',
-  'raw_score',
-  'quantile_score',
-  'hpo_gene_relevance',
-]
 
 function formatValue(value: ScoreRow[string]): string {
   if (value === null || value === undefined) return ''
@@ -32,9 +20,13 @@ function formatValue(value: ScoreRow[string]): string {
 export function ScoresTable({
   rows,
   downloadFileName,
+  selectedColumns: selected,
+  onSelectedColumnsChange: setSelected,
 }: {
   rows: ScoreRow[]
   downloadFileName: string
+  selectedColumns: Set<string>
+  onSelectedColumnsChange: Dispatch<SetStateAction<Set<string>>>
 }) {
   const allColumns = useMemo(() => {
     const seen = new Set<string>()
@@ -50,9 +42,6 @@ export function ScoresTable({
     return ordered
   }, [rows])
 
-  const [selected, setSelected] = useState<Set<string>>(
-    () => new Set(PREFERRED_COLUMNS),
-  )
   const prevSignature = useRef<string>('')
   const parentRef = useRef<HTMLDivElement>(null)
 
@@ -67,7 +56,7 @@ export function ScoresTable({
       prevSignature.current = signature
       setSelected(new Set(allColumns.filter((c) => PREFERRED_COLUMNS.includes(c))))
     }
-  }, [allColumns])
+  }, [allColumns, setSelected])
 
   // Virtualization setup with dynamic row height measurement
   const rowVirtualizer = useVirtualizer<HTMLDivElement, HTMLDivElement>({

@@ -1,10 +1,24 @@
-import type { ComponentPropsWithoutRef } from 'react'
+import { useMemo, useState, type ComponentPropsWithoutRef } from 'react'
 import Markdown from 'react-markdown'
 import { Loader2, Sparkles } from 'lucide-react'
 import { useAiSummary, type ApiRequestError, type ScoreRow } from '@/api'
 import type { LlmSettings } from '@/llmSettings'
 import { Badge } from '@/ui/badge'
 import { Button } from '@/ui/button'
+import { Input } from '@/ui/input'
+import { Label } from '@/ui/label'
+import { Tabs, TabsList, TabsTrigger } from '@/ui/tabs'
+
+// Keep in sync with LLM_MAX_ROWS in backend/services.py.
+const LLM_MAX_ROWS = 100
+const DEFAULT_QUANTILE_THRESHOLD = 0.5
+
+type ColumnScope = 'all' | 'selected'
+
+function quantileMagnitude(row: ScoreRow): number | null {
+  const value = row.quantile_score
+  return typeof value === 'number' && Number.isFinite(value) ? Math.abs(value) : null
+}
 
 // react-markdown emits bare HTML tags and Tailwind's preflight strips their
 // default styling, so every element the model can produce gets its classes
@@ -70,15 +84,40 @@ export function AiSummaryCard({
   organism,
   rows,
   hpoTerms,
+  selectedColumns,
 }: {
   llm: LlmSettings
   variant: string
   organism: string
   rows: ScoreRow[]
   hpoTerms: string[]
+  /** The column set currently checked in the results table's column picker. */
+  selectedColumns: Set<string>
 }) {
   const summaryMutation = useAiSummary()
   const result = summaryMutation.data
+
+  const [thresholdInput, setThresholdInput] = useState(String(DEFAULT_QUANTILE_THRESHOLD))
+  const [columnScope, setColumnScope] = useState<ColumnScope>('selected')
+
+  const quantileThreshold = useMemo(() => {
+    const parsed = Number(thresholdInput)
+    return Number.isFinite(parsed) ? Math.min(1, Math.max(0, parsed)) : DEFAULT_QUANTILE_THRESHOLD
+  }, [thresholdInput])
+
+  const { passingCount, noQuantileCount } = useMemo(() => {
+    let passing = 0
+    let noQuantile = 0
+    for (const row of rows) {
+      const magnitude = quantileMagnitude(row)
+      if (magnitude === null) {
+        noQuantile += 1
+      } else if (magnitude > quantileThreshold) {
+        passing += 1
+      }
+    }
+    return { passingCount: passing, noQuantileCount: noQuantile }
+  }, [rows, quantileThreshold])
 
   function run() {
     summaryMutation.mutate({
@@ -89,6 +128,8 @@ export function AiSummaryCard({
       organism,
       rows,
       hpo_terms: hpoTerms,
+      quantile_threshold: quantileThreshold,
+      columns: columnScope === 'all' ? null : Array.from(selectedColumns),
     })
   }
 
@@ -115,6 +156,48 @@ export function AiSummaryCard({
           or diagnostic advice. Your variant and scores are sent to the LLM
           provider you configured.
         </p>
+
+        <div className="grid gap-3 rounded-lg border p-3 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="quantile-threshold">Quantile-score threshold</Label>
+            <Input
+              id="quantile-threshold"
+              type="number"
+              min={0}
+              max={1}
+              step={0.01}
+              value={thresholdInput}
+              onChange={(e) => setThresholdInput(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Rows with |quantile_score| &gt; {quantileThreshold.toFixed(2)} are sent, strongest
+              first
+              {passingCount > LLM_MAX_ROWS
+                ? `: ${passingCount} rows above threshold, top ${LLM_MAX_ROWS} will be sent.`
+                : `: ${passingCount} row${passingCount === 1 ? '' : 's'} above threshold will be sent.`}
+              {noQuantileCount > 0 &&
+                ` ${noQuantileCount} row${noQuantileCount === 1 ? '' : 's'} with no quantile_score ${noQuantileCount === 1 ? 'is' : 'are'} always excluded.`}
+            </p>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="column-scope">Columns to include</Label>
+            <Tabs
+              value={columnScope}
+              onValueChange={(v) => setColumnScope(v as ColumnScope)}
+            >
+              <TabsList id="column-scope" className="grid w-full grid-cols-2">
+                <TabsTrigger value="selected">Selected columns</TabsTrigger>
+                <TabsTrigger value="all">All columns</TabsTrigger>
+              </TabsList>
+            </Tabs>
+            <p className="text-xs text-muted-foreground">
+              {columnScope === 'selected'
+                ? `Uses the ${selectedColumns.size} column${selectedColumns.size === 1 ? '' : 's'} checked in the results table's Columns picker.`
+                : 'Uses every column in the results table.'}
+            </p>
+          </div>
+        </div>
 
         {summaryMutation.isError && (
           <div
@@ -158,7 +241,7 @@ export function AiSummaryCard({
               <summary className="cursor-pointer text-xs text-muted-foreground">
                 What was sent to {result.model} ({result.row_count} of{' '}
                 {rows.length} rows
-                {result.truncated ? ', ranked by |quantile_score|' : ''})
+                {result.truncated ? ', above threshold and ranked by |quantile_score|' : ''})
               </summary>
               <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-muted-foreground">
                 {result.scores_digest}

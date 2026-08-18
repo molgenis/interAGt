@@ -834,29 +834,13 @@ REGULATORY_OUTPUT_TYPES = {
     "CONTACT_MAPS",
 }
 
-# What makes two rows of the same output type different things rather than the
-# same thing measured in another tissue. Mirrors the facet fields
-# `ScoresDisplay.tsx` uses for its bar charts; output types absent here fall
-# back to biosample_name, which never collapses distinct rows together.
-LLM_FACET_FIELDS = {
-    "RNA_SEQ": "gene_name",
-    "Polyadenylation": "gene_name",
-    "SPLICE_JUNCTIONS": "gene_name",
-    "SPLICE_SITES": "gene_name",
-    "SPLICE_SITE_USAGE": "gene_name",
-    "CHIP_TF": "transcription_factor",
-    "CHIP_HISTONE": "histone_mark",
-    "CAGE": "track_strand",
-    "PROCAP": "track_strand",
-}
-
-# A run can return thousands of rows, so the digest is capped three ways:
-# per facet group (don't spend the budget on one gene across many tissues),
-# per output type (don't let CHIP_TF crowd out RNA_SEQ), and overall. Rows are
-# taken strongest-first, so each cap keeps the highest-ranked survivors.
-LLM_ROWS_PER_GROUP = 2
-LLM_ROWS_PER_OUTPUT_TYPE = 14
-LLM_MAX_ROWS = 70
+# Rows enter the digest only if |quantile_score| clears a user-set threshold
+# (see AiSummaryRequest.quantile_threshold); rows with no quantile_score never
+# match and are excluded outright, never silently ranked on raw_score instead.
+# Whatever clears the threshold is still hard-capped here, strongest first, so
+# a very low threshold can't blow up the prompt.
+LLM_DEFAULT_QUANTILE_THRESHOLD = 0.5
+LLM_MAX_ROWS = 100
 
 LLM_SYSTEM_PROMPT = """\
 You are a genomics assistant helping a researcher interpret AlphaGenome \
@@ -989,32 +973,22 @@ def _as_float(value: Any) -> float | None:
     return None if np.isnan(number) else number
 
 
-def _effect_size(quantile: float | None, raw: float | None) -> str:
-    """Bucket a row's magnitude, preferring the cross-scorer-comparable metric.
+def _effect_size(quantile: float) -> str:
+    """Bucket a row's magnitude on the cross-scorer-comparable metric.
 
     quantile_score is a percentile rank against common variation, so its
-    magnitude means the same thing for every track type; raw_score's does not.
-    The raw fallback thresholds are only reached when a scorer returned no
-    quantile at all.
+    magnitude means the same thing for every track type. Rows without a
+    quantile_score never reach here: they can't clear a quantile threshold,
+    so `format_scores_for_llm` excludes them before this is called.
     """
-    if quantile is not None:
-        magnitude = abs(quantile)
-        if magnitude < 0.5:
-            return "within common-variant range"
-        if magnitude < 0.8:
-            return "low effect"
-        if magnitude < 0.95:
-            return "moderate effect"
-        return "high effect"
-
-    if raw is None:
-        return "no score"
-    magnitude = abs(raw)
-    if magnitude < 0.1:
-        return "no or low effect (raw only)"
-    if magnitude < 0.4:
-        return "moderate effect (raw only)"
-    return "high effect (raw only)"
+    magnitude = abs(quantile)
+    if magnitude < 0.5:
+        return "within common-variant range"
+    if magnitude < 0.8:
+        return "low effect"
+    if magnitude < 0.95:
+        return "moderate effect"
+    return "high effect"
 
 
 def _output_type_is_signed(rows: list[dict[str, Any]]) -> dict[str, bool]:
@@ -1037,69 +1011,72 @@ def _output_type_is_signed(rows: list[dict[str, Any]]) -> dict[str, bool]:
     return signed
 
 
-def _row_label(row: dict[str, Any]) -> str:
-    """Describe what a row was measured on, beyond gene and output type."""
+_LABEL_FIELDS = ("biosample_name", "transcription_factor", "histone_mark", "track_strand")
+
+
+def _row_label(row: dict[str, Any], columns: set[str] | None) -> str:
+    """Describe what a row was measured on, beyond gene and output type.
+
+    Only draws on fields present in `columns` (None means "all columns"), so a
+    field the user unchecked in the table never leaks into the digest.
+    """
     parts: list[str] = []
     for key in ("biosample_name", "transcription_factor", "histone_mark"):
+        if columns is not None and key not in columns:
+            continue
         value = row.get(key)
         if value is not None and str(value).strip() and str(value) != "nan":
             parts.append(str(value))
-    strand = row.get("track_strand")
-    if strand is not None and str(strand).strip() in {"+", "-"}:
-        parts.append(f"strand {strand}")
+    if columns is None or "track_strand" in columns:
+        strand = row.get("track_strand")
+        if strand is not None and str(strand).strip() in {"+", "-"}:
+            parts.append(f"strand {strand}")
     return ", ".join(parts) if parts else "unspecified track"
 
 
-def _facet_value(row: dict[str, Any], output_type: str) -> str:
-    field_name = LLM_FACET_FIELDS.get(output_type, "biosample_name")
-    value = row.get(field_name)
-    if value is None or str(value).strip() in {"", "nan"}:
-        return "unspecified"
-    return str(value)
+def _columns_include(columns: set[str] | None, *names: str) -> bool:
+    """True if any of `names` should be shown: all columns, or one is selected."""
+    return columns is None or any(name in columns for name in names)
 
 
 def format_scores_for_llm(
     rows: list[dict[str, Any]],
-    rows_per_group: int = LLM_ROWS_PER_GROUP,
-    rows_per_output_type: int = LLM_ROWS_PER_OUTPUT_TYPE,
+    quantile_threshold: float = LLM_DEFAULT_QUANTILE_THRESHOLD,
     max_rows: int = LLM_MAX_ROWS,
+    columns: list[str] | None = None,
 ) -> tuple[str, int, bool]:
-    """Flatten scored rows into the ranked text digest sent to the model.
+    """Flatten scored rows into the text digest sent to the model.
+
+    Selection: keep rows with |quantile_score| > quantile_threshold, ranked
+    strongest first, hard-capped at max_rows. Rows with no quantile_score
+    (raw_score only) never clear a quantile threshold, so they are excluded
+    outright rather than falling back to raw_score.
+
+    `columns`, if given, restricts which fields a row's line can draw on
+    (None means every column is available); a field the user unchecked in the
+    table is omitted from the line rather than fabricated.
 
     Returns the digest, how many rows it covers, and whether rows were dropped.
     """
     if not rows:
         raise InvalidRequestError("No scored rows to summarize.")
 
-    def sort_key(row: dict[str, Any]) -> float:
+    column_set = set(columns) if columns is not None else None
+
+    def quantile_magnitude(row: dict[str, Any]) -> float | None:
         quantile = _as_float(row.get("quantile_score"))
-        if quantile is not None:
-            return abs(quantile)
-        raw = _as_float(row.get("raw_score"))
-        return abs(raw) if raw is not None else 0.0
+        return abs(quantile) if quantile is not None else None
 
-    signed_by_type = _output_type_is_signed(rows)
-    ranked = sorted(rows, key=sort_key, reverse=True)
-
-    seen_per_group: dict[tuple[str, str], int] = {}
-    seen_per_output_type: dict[str, int] = {}
-    kept: list[dict[str, Any]] = []
-    for row in ranked:
-        output_type = str(row.get("output_type") or "unknown")
-        if seen_per_output_type.get(output_type, 0) >= rows_per_output_type:
-            continue
-
-        group = (output_type, _facet_value(row, output_type))
-        if seen_per_group.get(group, 0) >= rows_per_group:
-            continue
-
-        seen_per_group[group] = seen_per_group.get(group, 0) + 1
-        seen_per_output_type[output_type] = seen_per_output_type.get(output_type, 0) + 1
-        kept.append(row)
-        if len(kept) >= max_rows:
-            break
+    above_threshold = [
+        row for row in rows if (m := quantile_magnitude(row)) is not None and m > quantile_threshold
+    ]
+    ranked = sorted(above_threshold, key=lambda row: quantile_magnitude(row) or 0.0, reverse=True)
+    kept = ranked[:max_rows]
 
     truncated = len(kept) < len(rows)
+    no_quantile_count = sum(1 for row in rows if _as_float(row.get("quantile_score")) is None)
+
+    signed_by_type = _output_type_is_signed(rows)
 
     def category(output_type: str) -> str:
         if output_type in GENE_LINKED_OUTPUT_TYPES:
@@ -1114,31 +1091,44 @@ def format_scores_for_llm(
         raw = _as_float(row.get("raw_score"))
         quantile = _as_float(row.get("quantile_score"))
 
-        if not signed_by_type.get(output_type, False):
-            direction = "magnitude only (unsigned scorer)"
-        elif raw is not None and raw < 0:
-            direction = "decreased"
-        elif raw is not None and raw > 0:
-            direction = "increased"
-        else:
-            direction = "no change"
+        segments: list[str] = []
 
-        gene = row.get("gene_name")
-        gene_part = (
-            f"{gene} | " if gene not in (None, "", "nan") and str(gene) != "nan" else ""
-        )
-        raw_text = f"{raw:.4g}" if raw is not None else "n/a"
-        quantile_text = f"{quantile:+.3f}" if quantile is not None else "n/a"
-        hpo_flag = (
-            " | matches a selected HPO term"
-            if _as_float(row.get("hpo_gene_relevance")) == 1.0
-            else ""
-        )
+        if _columns_include(column_set, "gene_name"):
+            gene = row.get("gene_name")
+            if gene not in (None, "", "nan") and str(gene) != "nan":
+                segments.append(str(gene))
+
+        if _columns_include(column_set, "output_type"):
+            segments.append(output_type)
+
+        if _columns_include(column_set, *_LABEL_FIELDS):
+            segments.append(_row_label(row, column_set))
+
+        if _columns_include(column_set, "raw_score"):
+            if not signed_by_type.get(output_type, False):
+                direction = "magnitude only (unsigned scorer)"
+            elif raw is not None and raw < 0:
+                direction = "decreased"
+            elif raw is not None and raw > 0:
+                direction = "increased"
+            else:
+                direction = "no change"
+            segments.append(direction)
+            segments.append(f"raw_score: {raw:.4g}" if raw is not None else "raw_score: n/a")
+
+        if _columns_include(column_set, "quantile_score"):
+            # quantile is never None here: selection already required it.
+            assert quantile is not None
+            segments.append(f"quantile_score: {quantile:+.3f}")
+            segments.append(_effect_size(quantile))
+
+        if _columns_include(column_set, "hpo_gene_relevance") and _as_float(
+            row.get("hpo_gene_relevance")
+        ) == 1.0:
+            segments.append("matches a selected HPO term")
 
         sections[category(output_type)].append(
-            f"{gene_part}{output_type} | {_row_label(row)} | {direction} | "
-            f"raw_score: {raw_text} | quantile_score: {quantile_text} | "
-            f"{_effect_size(quantile, raw)}{hpo_flag}"
+            " | ".join(segments) if segments else "(no selected columns)"
         )
 
     lines: list[str] = []
@@ -1149,11 +1139,18 @@ def format_scores_for_llm(
             lines.append("")
 
     if truncated:
-        lines.append(
-            f"(Digest shows the top {len(kept)} of {len(rows)} scored rows: at "
-            f"most {rows_per_group} per gene/factor and {rows_per_output_type} "
-            "per track type, strongest first.)"
+        note = (
+            f"(Digest shows the top {len(kept)} of {len(rows)} scored rows: "
+            f"rows with |quantile_score| > {quantile_threshold:g} are kept, "
+            f"strongest first, capped at {max_rows}."
         )
+        if no_quantile_count:
+            note += (
+                f" {no_quantile_count} row(s) had no quantile_score and were "
+                "excluded outright, never ranked by raw_score."
+            )
+        note += ")"
+        lines.append(note)
 
     return "\n".join(lines).strip(), len(kept), truncated
 
@@ -1204,9 +1201,13 @@ def summarize_variant_scores(
     organism_label: str,
     rows: list[dict[str, Any]],
     hpo_terms: Iterable[str] | None = None,
+    quantile_threshold: float = LLM_DEFAULT_QUANTILE_THRESHOLD,
+    columns: list[str] | None = None,
 ) -> dict[str, Any]:
     """Turn a scored variant into an LLM-written interpretation."""
-    scores_digest, row_count, truncated = format_scores_for_llm(rows)
+    scores_digest, row_count, truncated = format_scores_for_llm(
+        rows, quantile_threshold=quantile_threshold, columns=columns
+    )
     model_name = model.strip() or DEFAULT_LLM_MODEL
     client = get_llm_client(api_key, base_url)
     prompt = build_summary_prompt(variant_str, organism_label, scores_digest, hpo_terms)

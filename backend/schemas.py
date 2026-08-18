@@ -171,6 +171,10 @@ class AiSummaryRequest(LlmSettings):
     organism: str = "Human (hg38)"
     rows: list[dict[str, Any]]
     hpo_terms: list[str] = Field(default_factory=list)
+    # Rows enter the digest only if |quantile_score| clears this threshold.
+    quantile_threshold: float = Field(0.5, ge=0.0, le=1.0)
+    # Columns the digest may draw on; None means every column is available.
+    columns: list[str] | None = None
 
 
 class AiSummaryResponse(BaseModel):

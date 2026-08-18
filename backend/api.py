@@ -218,4 +218,6 @@ def ai_summary(payload: AiSummaryRequest) -> dict:
         organism_label=organism_label,
         rows=payload.rows,
         hpo_terms=payload.hpo_terms,
+        quantile_threshold=payload.quantile_threshold,
+        columns=payload.columns,
     )

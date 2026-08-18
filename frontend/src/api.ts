@@ -287,6 +287,8 @@ const api = {
       organism: string
       rows: ScoreRow[]
       hpo_terms: string[]
+      quantile_threshold: number
+      columns: string[] | null
     },
   ) => post<AiSummaryResponse>('/ai/summary', payload),
 }
@@ -420,6 +422,8 @@ export function useAiSummary() {
       organism: string
       rows: ScoreRow[]
       hpo_terms: string[]
+      quantile_threshold: number
+      columns: string[] | null
     }
   >({ mutationFn: (v) => api.postAiSummary(v), retry: false })
 }

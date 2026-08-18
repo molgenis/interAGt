@@ -58,8 +58,22 @@ export const SCORER_EXPLANATIONS: TrackExplanations = {
     'Splice-junction scorer: change in predicted exon-exon junction usage (ALT vs REF). Unsigned (magnitude only); bars always render as "positive" colored even when usage decreased.',
 }
 
+// Default-checked columns in the Scores-table column picker (ScoresDisplay.tsx).
+export const PREFERRED_COLUMNS = [
+  'output_type',
+  'gene_name',
+  'gene_id',
+  'biosample_name',
+  'transcription_factor',
+  'histone_mark',
+  'track_strand',
+  'raw_score',
+  'quantile_score',
+  'hpo_gene_relevance',
+]
+
 // Scores-table column header -> one-liner, shown as an Info tooltip on
-// hover. Keys match PREFERRED_COLUMNS in ScoresDisplay.tsx.
+// hover. Keys match PREFERRED_COLUMNS above.
 export const COLUMN_EXPLANATIONS: TrackExplanations = {
   output_type: 'Which AlphaGenome output track this row scores, e.g. RNA_SEQ or ATAC.',
   gene_name: 'Gene symbol this score is attributed to.',

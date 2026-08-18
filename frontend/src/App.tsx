@@ -13,7 +13,12 @@ import {
   type ApiRequestError,
   type TrackIssue,
 } from '@/api'
-import { TRACK_EXPLANATIONS, SCORER_EXPLANATIONS, ALL_RESULTS_EXPLANATION } from '@/trackExplanations'
+import {
+  TRACK_EXPLANATIONS,
+  SCORER_EXPLANATIONS,
+  ALL_RESULTS_EXPLANATION,
+  PREFERRED_COLUMNS,
+} from '@/trackExplanations'
 import {
   isLlmReady,
   loadLlmSettings,
@@ -218,6 +223,9 @@ export default function App() {
   const [selectedHpoTerms, setSelectedHpoTerms] = useState<string[]>([])
   const [selectedTissues, setSelectedTissues] = useState<string[]>([])
   const [selectedTracks, setSelectedTracks] = useState<string[]>([])
+  const [selectedColumns, setSelectedColumns] = useState<Set<string>>(
+    () => new Set(PREFERRED_COLUMNS),
+  )
   const [pendingAction, setPendingAction] = useState<Mode | null>(null)
   const [warningsDismissed, setWarningsDismissed] = useState(false)
   const [transcriptWarningDismissed, setTranscriptWarningDismissed] = useState(false)
@@ -692,6 +700,8 @@ export default function App() {
                     <ScoresTable
                       rows={scoreData.rows}
                       downloadFileName={`${sanitizeVariantForFilename(selectedAlternative || normalizedVariant)}_variant_scores`}
+                      selectedColumns={selectedColumns}
+                      onSelectedColumnsChange={setSelectedColumns}
                     />
                   </div>
                   
@@ -707,6 +717,7 @@ export default function App() {
                     organism={scoreMutation.variables?.organism ?? organismValue}
                     rows={scoreData.rows}
                     hpoTerms={scoreMutation.variables?.hpo_terms ?? []}
+                    selectedColumns={selectedColumns}
                   />
                 )}
 
