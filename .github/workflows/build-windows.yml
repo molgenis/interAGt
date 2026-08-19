@@ -4,9 +4,9 @@ name: Build Windows installer
 # a Windows host. This runs packaging/package_win.ps1 (packaging/build_win.ps1
 # + Inno Setup) on a windows-latest runner and uploads dist/InterAGt-Setup.exe.
 on:
-  # Manual only, plus release publishes below — no push trigger. This repo is
-  # private, so Windows minutes bill at 2x; do not re-add a push trigger
-  # without discussing cost first.
+  # Manual only, plus release publishes below — no push trigger, to keep
+  # control over expensive/long builds; do not re-add a push trigger without
+  # discussing it first.
   workflow_dispatch:
   # Publishing a GitHub release attaches the installer to it.
   release:

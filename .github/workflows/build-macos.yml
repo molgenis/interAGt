@@ -13,9 +13,10 @@ name: Build macOS DMG
 # Builds are unsigned and un-notarised — Gatekeeper will quarantine them on
 # first launch, same caveat the README already gives for local builds.
 on:
-  # Manual only, plus release publishes below — no push trigger. This repo is
-  # private, so macOS minutes bill at 10x, and the arm64+Intel matrix doubles
-  # that; do not re-add a push trigger without discussing cost first.
+  # Manual only, plus release publishes below — no push trigger, to keep
+  # control over expensive/long builds (macOS runner minutes are pricier, and
+  # the arm64+Intel matrix doubles that); do not re-add a push trigger
+  # without discussing it first.
   workflow_dispatch:
   # Publishing a GitHub release attaches the DMG to it.
   release:
