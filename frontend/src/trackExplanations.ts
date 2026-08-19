@@ -3,7 +3,7 @@ export type TrackExplanations = Record<string, string>
 // Shown above the "All results" table in Scores mode. Not part of either
 // map above since it describes the table as a whole, not a per-scorer row.
 export const ALL_RESULTS_EXPLANATION =
-  'Every scored row across your selected scorers, sorted by HPO-gene relevance first and then by quantile_score (see that column\'s tooltip). Only a subset of columns is shown by default; use the Columns button above the table to add more, and hover any header for its definition. Because some columns are hidden by default, rows can look identical here while differing in a column that isn\'t shown (e.g. distinct splice junctions or RNA-seq protocols); the CSV download always includes every column.'
+  'Every scored row across your selected scorers, sorted by HPO-gene relevance first then by quantile_score (only available for Human) and if unavailable by raw_score. Only a subset of columns is shown by default; use the Columns button above the table to add more, and hover any header for its definition. Because some columns are hidden by default, rows can look identical here while differing in a column that isn\'t shown (e.g. distinct splice junctions or RNA-seq protocols); the CSV download always includes every column.'
 
 export const TRACK_EXPLANATIONS: TrackExplanations = {
   RNA_SEQ:
