@@ -36,7 +36,38 @@ By inputting a variant, researchers can:
 For more details, see the [AlphaGenome Documentation](https://www.alphagenomedocs.com)
 
 
-## **Setup & Installation**
+
+## Quick start
+
+### Windows
+- Download latest Windows release [here](todo)
+- Double click to open **InterAGt-Setup.zip** and extract it
+- Double click **InterAGt-Setup.exe**
+- Follow the steps and click **Install**
+- Click **Finish** with **Launch InterAGt** ticked on
+- Windows Defender Firewall may warn and block app components, click **Allow access**
+- InterAGT will now run, next time you can start it directly via shortcut or install folder.
+
+### macOS
+- Download latest macOS release
+  - If you have an M1 or better, download the [arm64](todo) version
+  - If you have an older Intel based Mac, download the [x86_64](todo) version
+- Double click to extract **InterAGt-DMG-arm64.zip** (or **InterAGt-DMG-x86_64.zip**)
+- Double click to open **InterAGt-arm64.dmg** (or **InterAGt-x86_64.dmg**)
+- In the popup window, drag **InterAGT.app** into **Applications**
+- Find **InterAGt.app** in **Applications** and double click to open
+- You will probably get the following warning:
+```
+InterAGt.app” Not Opened  
+Apple could not verify “InterAGt.app” is free of malware that may harm your Mac or compromise your privacy.
+```
+- Click **Done**
+- Go to your **System Settings** and then to **Privacy & Security**
+- Scroll down to where it says `InterAGt.app was blocked to protect your Mac`, click **Open Anyway** and again **Open Anyway** in the popup
+- Use your admin password or Touch ID to continue
+- InterAGT will now run, next time you can start it from Applications directly.
+
+## **Full setup & installation instructions**
 
 ### **Option 1: Pre-built Binaries**
 The easiest way to get started is to use one of the pre-compiled executables. No Python, Bun, or additional dependencies are required.
