@@ -39,7 +39,7 @@ For more details, see the [AlphaGenome Documentation](https://www.alphagenomedoc
 ## Quick start
 
 ### Windows
-- Download latest Windows release [here](todo)
+- Download latest Windows release [here](https://github.com/molgenis/interAGt/releases/download/v1.0.0/InterAGt-Setup.exe)
 - Double click to open **InterAGt-Setup.zip** and extract it
 - Double click **InterAGt-Setup.exe**
 - Follow the steps and click **Install**
@@ -49,8 +49,8 @@ For more details, see the [AlphaGenome Documentation](https://www.alphagenomedoc
 
 ### macOS
 - Download latest macOS release
-  - If you have an M1 or better, download the [arm64](todo) version
-  - If you have an older Intel based Mac, download the [x86_64](todo) version
+  - If you have an M1 or better, download the [arm64](https://github.com/molgenis/interAGt/releases/download/v1.0.0/InterAGt-arm64.dmg) version
+  - If you have an older Intel based Mac, download the [x86_64](https://github.com/molgenis/interAGt/releases/download/v1.0.0/InterAGt-x86_64.dmg) version
 - Double click to extract **InterAGt-DMG-arm64.zip** (or **InterAGt-DMG-x86_64.zip**)
 - Double click to open **InterAGt-arm64.dmg** (or **InterAGt-x86_64.dmg**)
 - In the popup window, drag **InterAGT.app** into **Applications**
@@ -68,8 +68,8 @@ Apple could not verify “InterAGt.app” is free of malware that may harm your 
 
 ### Linux (Ubuntu)
 - Download latest Ubuntu Linux release
-  - If you have an x86_64 processor, download the [x86_64](todo) version
-  - For arm processors, download the [arm64](todo) version
+  - If you have an x86_64 processor, download the [x86_64](https://github.com/molgenis/interAGt/releases/download/v1.0.0/InterAGt-x86_64.AppImage) version
+  - For arm processors, download the [arm64](https://github.com/molgenis/interAGt/releases/download/v1.0.0/InterAGt-aarch64.AppImage) version
 - Extract the **InterAGt-AppImage-x86_64.zip** (or **InterAGt-AppImage-aarch64.zip**)
 - Double click to open the **InterAGt-x86_64.AppImage** (or **InterAGt-aarch64.AppImage**)
 - Note that you might need to add execution permission for the AppImage. This is done either by Properties -> Permissions -> Allow executing file as program or using the commandline:```(sudo) chmod + x InterAGt-x86_64.AppImage (or InterAGt-aarch64.AppImage)```
