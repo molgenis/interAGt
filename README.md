@@ -5,9 +5,9 @@
 </p>
 
 <p align="center">
-<a href="https://github.com/Timniem/ag_streamlit_app/actions/workflows/build-macos.yml"><img src="https://github.com/Timniem/ag_streamlit_app/actions/workflows/build-macos.yml/badge.svg" alt="Build macOS DMG" /></a>
-<a href="https://github.com/Timniem/ag_streamlit_app/actions/workflows/build-windows.yml"><img src="https://github.com/Timniem/ag_streamlit_app/actions/workflows/build-windows.yml/badge.svg" alt="Build Windows installer" /></a>
-<a href="https://github.com/Timniem/ag_streamlit_app/actions/workflows/build-linux.yml"><img src="https://github.com/Timniem/ag_streamlit_app/actions/workflows/build-linux.yml/badge.svg" alt="Build Linux AppImage" /></a>
+<a href="https://github.com/molgenis/interAGt/actions/workflows/build-macos.yml"><img src="https://github.com/molgenis/interAGt/actions/workflows/build-macos.yml/badge.svg" alt="Build macOS DMG" /></a>
+<a href="https://github.com/molgenis/interAGt/actions/workflows/build-windows.yml"><img src="https://github.com/molgenis/interAGt/actions/workflows/build-windows.yml/badge.svg" alt="Build Windows installer" /></a>
+<a href="https://github.com/molgenis/interAGt/actions/workflows/build-linux.yml"><img src="https://github.com/molgenis/interAGt/actions/workflows/build-linux.yml/badge.svg" alt="Build Linux AppImage" /></a>
 </p>
 
 ## **InterAGt: An interactive interface for predicting genetic variant effects using AlphaGenome**
@@ -34,7 +34,6 @@ By inputting a variant, researchers can:
 - Žiga Avsec, Natasha Latysheva, Jun Cheng, *et al.* **Advancing regulatory variant effect prediction with AlphaGenome.** *Nature*, 649(8099):1206–1218, 2026. [DOI:10.1038/s41586-025-10014-0](https://doi.org/10.1038/s41586-025-10014-0)
 
 For more details, see the [AlphaGenome Documentation](https://www.alphagenomedocs.com)
-
 
 
 ## Quick start
@@ -67,14 +66,24 @@ Apple could not verify “InterAGt.app” is free of malware that may harm your 
 - Use your admin password or Touch ID to continue
 - InterAGT will now run, next time you can start it from Applications directly.
 
+### Linux (Ubuntu)
+- Download latest Ubuntu Linux release
+  - If you have an x86_64 processor, download the [x86_64](todo) version
+  - For arm processors, download the [arm64](todo) version
+- Extract the **InterAGt-AppImage-x86_64.zip** (or **InterAGt-AppImage-aarch64.zip**)
+- Double click to open the **InterAGt-x86_64.AppImage** (or **InterAGt-aarch64.AppImage**)
+- Note that you might need to add execution permission for the AppImage. This is done either by Properties -> Permissions -> Allow executing file as program or using the commandline:```(sudo) chmod + x InterAGt-x86_64.AppImage (or InterAGt-aarch64.AppImage)```
+- InterAGT will now run.
+  
+
 ## **Full setup & installation instructions**
 
 ### **Option 1: Pre-built Binaries**
 The easiest way to get started is to use one of the pre-compiled executables. No Python, Bun, or additional dependencies are required.
 
 Pre-compiled binaries for Windows, macOS (arm64 and Intel), and Linux (x86_64 and arm64) are built by [GitHub Actions](.github/workflows/) and published two ways:
-- **Releases**: each published [GitHub Release](https://github.com/Timniem/ag_streamlit_app/releases) has `InterAGt-Setup.exe`, `InterAGt-arm64.dmg`, `InterAGt-x86_64.dmg`, `InterAGt-x86_64.AppImage`, and `InterAGt-aarch64.AppImage` attached — this is the recommended download location.
-- **Manual builds**: any workflow can also be triggered on demand from the [Actions tab](https://github.com/Timniem/ag_streamlit_app/actions) (`Run workflow`), producing artifacts downloadable from that run for 90 days without needing a release.
+- **Releases**: each published [GitHub Release](https://github.com/molgenis/interAGt/releases) has `InterAGt-Setup.exe`, `InterAGt-arm64.dmg`, `InterAGt-x86_64.dmg`, `InterAGt-x86_64.AppImage`, and `InterAGt-aarch64.AppImage` attached — this is the recommended download location.
+- **Manual builds**: any workflow can also be triggered on demand from the [Actions tab](https://github.com/molgenis/interAGt/actions) (`Run workflow`), producing artifacts downloadable from that run for 90 days without needing a release.
 
 After downloading:
 
@@ -156,8 +165,8 @@ For manual setup:
 
 ```bash
 # Clone the repository
-git clone https://github.com/Timniem/ag_streamlit_app
-cd ag_streamlit_app
+git clone https://github.com/molgenis/interAGt
+cd interAGt
 
 # Install dependencies
 pip install --upgrade pip
