@@ -7,6 +7,9 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 # `python3` locally.
 PYTHON="$(command -v python || command -v python3)"
 
+# Get the path to certifi's CA bundle
+CERTIFI_CA_BUNDLE=$("$PYTHON" -m certifi)
+
 "$PYTHON" -m PyInstaller --noconfirm \
   --clean \
   --onedir \
@@ -26,4 +29,5 @@ PYTHON="$(command -v python || command -v python3)"
   --add-data "app_launcher.py:."\
   --add-data "resources:resources" \
   --add-data "frontend/dist:frontend/dist" \
+  --add-data "$CERTIFI_CA_BUNDLE:." \
   app_launcher.py 
