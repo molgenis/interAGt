@@ -18,6 +18,8 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 # locally, matching build_mac.sh.
 PYTHON="$(command -v python || command -v python3)"
 
+CERTIFI_CA_BUNDLE=$("$PYTHON" -m certifi)
+
 "$PYTHON" -m PyInstaller --noconfirm \
   --clean \
   --onedir \
@@ -30,6 +32,7 @@ PYTHON="$(command -v python || command -v python3)"
   --collect-all pywebview \
   --collect-all keyring \
   --collect-all qtpy \
+  --collect-all certifi \
   --hidden-import PyQt6.QtWebEngineCore \
   --hidden-import PyQt6.QtWebEngineWidgets \
   --add-data "backend:backend" \
@@ -38,4 +41,5 @@ PYTHON="$(command -v python || command -v python3)"
   --add-data "app_launcher.py:."\
   --add-data "resources:resources" \
   --add-data "frontend/dist:frontend/dist" \
+  --add-data "$CERTIFI_CA_BUNDLE:." \
   app_launcher.py
