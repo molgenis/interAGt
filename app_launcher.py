@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import argparse
 import threading
 import subprocess
@@ -11,8 +12,10 @@ import webview
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+import certifi
 
 webview.settings['ALLOW_DOWNLOADS'] = True
+os.environ['SSL_CERT_FILE'] = certifi.where()
 
 parser = argparse.ArgumentParser(description="AGInterpret app launcher")
 parser.add_argument('--dev', action='store_true', help='Run with frontend dev server (Bun)')
