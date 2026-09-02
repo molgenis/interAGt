@@ -9,3 +9,4 @@ pydantic==2.13.4
 pywebview==6.2.1
 requests==2.34.2
 uvicorn==0.51.0
+certifi==2026.07.22

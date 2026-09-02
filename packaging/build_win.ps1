@@ -1,3 +1,5 @@
+$certifiPath = & $python -m certifi
+
 $args = @(
     "--noconfirm"
     "--clean"
@@ -14,6 +16,7 @@ $args = @(
     "--collect-all", "keyring"
     "--collect-all", "clr_loader"
     "--collect-all", "pythonnet"
+    "--collect-all", "certifi"
     "--hidden-import", "clr"
     "--add-data", "app_launcher.py:."
     "--add-data", "backend:backend"
@@ -21,10 +24,10 @@ $args = @(
     "--add-data", "launcher_keystore.py:."
     "--add-data", "resources:resources"
     "--add-data", "frontend/dist:frontend/dist"
+    "--add-data", "$certifiPath:."
     "app_launcher.py"
 )
 # `python` is what actions/setup-python puts on PATH; the `py` launcher is not
 # guaranteed to be installed there. Prefer `python`, fall back to `py` locally.
 $python = if (Get-Command python -ErrorAction SilentlyContinue) { "python" } else { "py" }
 & $python -m PyInstaller @args
-
