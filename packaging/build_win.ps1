@@ -1,4 +1,3 @@
-$certifiPath = & $python -m certifi
 
 $args = @(
     "--noconfirm"
@@ -24,7 +23,6 @@ $args = @(
     "--add-data", "launcher_keystore.py:."
     "--add-data", "resources:resources"
     "--add-data", "frontend/dist:frontend/dist"
-    "--add-data", "$certifiPath:."
     "app_launcher.py"
 )
 # `python` is what actions/setup-python puts on PATH; the `py` launcher is not
