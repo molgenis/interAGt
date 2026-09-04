@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { Download } from 'lucide-react'
 import { Button } from '@/ui/button'
 import { Plot, PLOTLY_CONFIG } from '@/plotly'
@@ -12,18 +12,118 @@ export function TrackPlot({
   payload: TrackPlotResponse
   isDark: boolean
 }) {
-  const figure = useMemo(
-    () => buildTrackFigure(payload, isDark),
-    [payload, isDark],
+  const [graphDiv, setGraphDiv] = useState<any>(null)
+  const [trackOrder, setTrackOrder] = useState<number[]>([])
+  const [collapsedTracks, setCollapsedTracks] = useState<Set<number>>(new Set())
+  const [transcriptPosition, setTranscriptPosition] = useState<'top' | 'bottom'>('bottom')
+
+  useEffect(() => {
+    setTrackOrder(payload.tracks.map((_, i) => i))
+    setCollapsedTracks(new Set())
+  }, [payload])
+
+  const orderedPayload = useMemo<TrackPlotResponse>(
+    () => ({
+      ...payload,
+      tracks:
+        trackOrder.length > 0
+          ? trackOrder.map(id => payload.tracks[id])
+          : payload.tracks,
+    }),
+    [payload, trackOrder],
   )
+
+  function moveTrackUp(rowIndex: number) {
+    setTrackOrder(prev => {
+      if (rowIndex <= 0) return prev
+      const next = [...prev]
+      ;[next[rowIndex - 1], next[rowIndex]] = [next[rowIndex], next[rowIndex - 1]]
+      return next
+    })
+  }
+
+  function moveTrackDown(rowIndex: number) {
+    setTrackOrder(prev => {
+      if (rowIndex >= prev.length - 1) return prev
+      const next = [...prev]
+      ;[next[rowIndex], next[rowIndex + 1]] = [next[rowIndex + 1], next[rowIndex]]
+      return next
+    })
+  }
+
+  function moveTranscriptToTop() {
+    setTranscriptPosition('top')
+  }
+
+  function moveTranscriptToBottom() {
+    setTranscriptPosition('bottom')
+  }
+
+  const figure = useMemo(
+    () =>
+      buildTrackFigure(
+        orderedPayload,
+        isDark,
+        collapsedTracks,
+        trackOrder,
+        transcriptPosition,
+      ),
+    [orderedPayload, isDark, collapsedTracks, trackOrder, transcriptPosition],
+  )
+
+  useEffect(() => {
+    if (!graphDiv?.on) return
+
+    const handler = (event: any) => {
+      const name = event.annotation?.name ?? event.annotation?.text
+      if (!name) return
+
+      if (name.startsWith('move-up-')) {
+        const row = Number(name.replace('move-up-', '')) - 1
+        moveTrackUp(row)
+        return
+      }
+
+      if (name.startsWith('move-down-')) {
+        const row = Number(name.replace('move-down-', '')) - 1
+        moveTrackDown(row)
+        return
+      }
+
+      if (name === 'transcript-to-top') {
+        moveTranscriptToTop()
+        return
+      }
+
+      if (name === 'transcript-to-bottom') {
+        moveTranscriptToBottom()
+        return
+      }
+    }
+
+    graphDiv.on('plotly_clickannotation', handler)
+
+    return () => {
+      graphDiv.removeListener?.('plotly_clickannotation', handler)
+    }
+  }, [graphDiv, trackOrder, transcriptPosition])
+
   return (
     <div className="w-full">
       <Plot
         data={figure.data}
-        layout={{ ...figure.layout, autosize: true }}
+        layout={{
+          ...figure.layout,
+          autosize: true,
+        }}
         config={PLOTLY_CONFIG}
         useResizeHandler
-        style={{ width: '100%', height: '100%' }}
+        style={{
+          width: '100%',
+          height: '100%',
+        }}
+        onInitialized={(_, gd) => setGraphDiv(gd)}
+        onUpdate={(_, gd) => setGraphDiv(gd)}
       />
     </div>
   )
