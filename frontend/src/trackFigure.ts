@@ -359,7 +359,7 @@ export function buildTrackFigure(
     shapes,
     annotations,
     hoverlabel: themedHoverLabel(theme),
-    margin: { l: 100, r: 30, t: 40, b: 60 },
+    margin: { l: 50, r: 100, t: 40, b: 60 },
   })
 
   const domains = makeDomains(rowHeights)
@@ -390,27 +390,35 @@ export function buildTrackFigure(
         domain: domains[row - 1],
       }
 
-      // Move up/down buttons for tracks (skip if first/last)
-      if (row > (transcriptPosition === 'top' ? 2 : 1)) {
-        annotations.push({
-          xref: 'paper', yref: `${yRef(row)} domain`, x: -0.075, y: 0.82,
-          text: '▲', showarrow: false,
-          font: { size: 14, color: theme.muted },
-          captureevents: true,
-          name: `move-up-${row}`,
-          hovertext: 'Move track up',
-        })
-      }
-      if (row < (transcriptPosition === 'top' ? nSubplots - 1 : tracks.length)) {
-        annotations.push({
-          xref: 'paper', yref: `${yRef(row)} domain`, x: -0.075, y: 0.18,
-          text: '▼', showarrow: false,
-          font: { size: 14, color: theme.muted },
-          captureevents: true,
-          name: `move-down-${row}`,
-          hovertext: 'Move track down',
-        })
-      }
+      const firstTrackRow = transcriptPosition === 'top' ? 2 : 1
+      const lastTrackRow = transcriptPosition === 'top' ? nSubplots : tracks.length
+      annotations.push({
+        xref: 'paper',
+        yref: `${yRef(row)} domain`,
+        x: 1.05,
+        y: 0.82,
+        text: '▲',
+        showarrow: false,
+        font: { size: 14, color: theme.muted },
+        captureevents: true,
+        name: `move-up-${row}`,
+        hovertext: 'Move track up',
+        xanchor: 'left',
+        opacity: row === firstTrackRow ? 0.3 : 1,  // Disable for first track
+      }, {
+        xref: 'paper',
+        yref: `${yRef(row)} domain`,
+        x: 1.05,
+        y: 0.18,
+        text: '▼',
+        showarrow: false,
+        font: { size: 14, color: theme.muted },
+        captureevents: true,
+        name: `move-down-${row}`,
+        hovertext: 'Move track down',
+        xanchor: 'left',
+        opacity: row === lastTrackRow ? 0.3 : 1,  // Disable for last track
+      })
     } else if (isTranscriptRow) {
       layout[yKey(row)] = {
         ...themedAxis(theme),
@@ -427,7 +435,7 @@ export function buildTrackFigure(
         {
           xref: 'paper',
           yref: `${yRef(row)} domain`,
-          x: -0.075,
+          x: 1.05,
           y: 0.82,
           text: '↑↑',
           showarrow: false,
@@ -435,12 +443,13 @@ export function buildTrackFigure(
           captureevents: true,
           name: `transcript-to-top`,
           hovertext: 'Move to top',
+          xanchor: 'left',
           opacity: transcriptPosition === 'top' ? 0.3 : 1,
         },
         {
           xref: 'paper',
           yref: `${yRef(row)} domain`,
-          x: -0.075,
+          x: 1.05,
           y: 0.18,
           text: '↓↓',
           showarrow: false,
@@ -448,6 +457,7 @@ export function buildTrackFigure(
           captureevents: true,
           name: `transcript-to-bottom`,
           hovertext: 'Move to bottom',
+          xanchor: 'left',
           opacity: transcriptPosition === 'bottom' ? 0.3 : 1,
         }
       )
