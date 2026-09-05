@@ -33,20 +33,26 @@ export function TrackPlot({
     [payload, trackOrder],
   )
 
-  function moveTrackUp(rowIndex: number) {
+  function moveTrackUp(position: number) {
     setTrackOrder(prev => {
-      if (rowIndex <= 0) return prev
+      if (position <= 1) return prev  // Can't move up position 1
       const next = [...prev]
-      ;[next[rowIndex - 1], next[rowIndex]] = [next[rowIndex], next[rowIndex - 1]]
+      ;[next[position - 2], next[position - 1]] = [
+        next[position - 1],
+        next[position - 2],
+      ]
       return next
     })
   }
 
-  function moveTrackDown(rowIndex: number) {
+  function moveTrackDown(position: number) {
     setTrackOrder(prev => {
-      if (rowIndex >= prev.length - 1) return prev
+      if (position >= prev.length) return prev  // Can't move down last position
       const next = [...prev]
-      ;[next[rowIndex], next[rowIndex + 1]] = [next[rowIndex + 1], next[rowIndex]]
+      ;[next[position - 1], next[position]] = [
+        next[position],
+        next[position - 1],
+      ]
       return next
     })
   }
@@ -79,14 +85,14 @@ export function TrackPlot({
       if (!name) return
 
       if (name.startsWith('move-up-')) {
-        const row = Number(name.replace('move-up-', '')) - 1
-        moveTrackUp(row)
+        const position = Number(name.replace('move-up-', ''))
+        moveTrackUp(position)
         return
       }
 
       if (name.startsWith('move-down-')) {
-        const row = Number(name.replace('move-down-', '')) - 1
-        moveTrackDown(row)
+        const position = Number(name.replace('move-down-', ''))
+        moveTrackDown(position)
         return
       }
 

@@ -385,13 +385,11 @@ export function buildTrackFigure(
 
     if (isTrackRow) {
       const trackIdx = transcriptPosition === 'top' ? row - 2 : row - 1
+      const position = transcriptPosition === 'top' ? row - 1 : row  // Track position (1-based)
       layout[yKey(row)] = {
         ...makeYAxis(row, theme, tracks[trackIdx]),
         domain: domains[row - 1],
       }
-
-      const firstTrackRow = transcriptPosition === 'top' ? 2 : 1
-      const lastTrackRow = transcriptPosition === 'top' ? nSubplots : tracks.length
       annotations.push({
         xref: 'paper',
         yref: `${yRef(row)} domain`,
@@ -401,10 +399,10 @@ export function buildTrackFigure(
         showarrow: false,
         font: { size: 14, color: theme.muted },
         captureevents: true,
-        name: `move-up-${row}`,
+        name: `move-up-${position}`,  // Use position, not row
         hovertext: 'Move track up',
         xanchor: 'left',
-        opacity: row === firstTrackRow ? 0.3 : 1,  // Disable for first track
+        opacity: position === 1 ? 0.3 : 1, 
       }, {
         xref: 'paper',
         yref: `${yRef(row)} domain`,
@@ -414,10 +412,10 @@ export function buildTrackFigure(
         showarrow: false,
         font: { size: 14, color: theme.muted },
         captureevents: true,
-        name: `move-down-${row}`,
+        name: `move-down-${position}`,  // Use position, not row
         hovertext: 'Move track down',
         xanchor: 'left',
-        opacity: row === lastTrackRow ? 0.3 : 1,  // Disable for last track
+        opacity: position === tracks.length ? 0.3 : 1, 
       })
     } else if (isTranscriptRow) {
       layout[yKey(row)] = {
