@@ -83,8 +83,7 @@ function buildContinuousTraces(
 
 function arcPath(donor: number, acceptor: number, peak: number, yOff: number): string {
   const span = acceptor - donor
-  // Control points at 20% inset, overshoot peak by 20% to approximate the steeper arch shape
-  const cp = peak * 1.2 + yOff
+  const cp = peak * 1.3 + yOff
   const cpx1 = donor + span * 0.2
   const cpx2 = acceptor - span * 0.2
   return `M ${donor},${yOff} C ${cpx1},${cp} ${cpx2},${cp} ${acceptor},${yOff}`
@@ -109,26 +108,30 @@ function buildJunctionShapes(
   let maxHeight = 0
 
   for (const jc of junctions) {
-    if (jc.count < 0.005 || jc.end <= jc.start) continue
-    const sign = jc.strand === '+' ? 1 : -1
-    const height = Math.log(jc.count + 1) * 40
-    const peak = sign * height
+    if (jc.count < 0.001 ) continue
+    const height = Math.max(4, Math.log(jc.count + 1) * 40)
+    const peak = height
 
     shapes.push({
       type: 'path',
       path: arcPath(jc.start, jc.end, peak, yOffset),
-      line: { color, width: Math.max(1, Math.log(jc.count + 1)) },
+      line: {
+        color,
+        width: Math.max(1.5, Math.log(jc.count + 1) * 1.2)
+      },
       fillcolor: 'rgba(0,0,0,0)',
       xref: xaxis,
       yref: yaxis,
     })
 
     const mid = (jc.start + jc.end) / 2
+    // Adapt decimal places: 3 for <0.1, 2 for <1, 1 otherwise
+    const decimals = jc.count < 0.1 ? 3 : jc.count < 1 ? 2 : 1
     annotations.push({
       x: mid,
-      y: sign * (height + 2) + yOffset,
+      y: height + 2 + yOffset,
       showarrow: false,
-      text: jc.count.toFixed(1),
+      text: jc.count.toFixed(decimals),
       font: { color: theme.fg, size: 12 },
       bgcolor: theme.surface,
       xref: xaxis,
@@ -158,7 +161,6 @@ function buildSashimiObjects(
     annotations: [...ref.annotations, ...alt.annotations],
   }
 }
-
 // --- Contact map ---
 
 function buildContactMapTrace(spec: ContactMapTrack, row: number): unknown {
