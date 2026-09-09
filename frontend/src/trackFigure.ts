@@ -257,34 +257,59 @@ function makeYAxis(
 
 
 // --- Main entry point ---
-
 export function buildTrackFigure(
   payload: TrackPlotResponse,
   isDark = false,
+  collapsedTracks: Set<number> = new Set(),
+  trackOrder: number[] = [],
+  transcriptPosition: 'top' | 'bottom' = 'bottom',
 ): PlotlyFigure {
   const { tracks, transcripts, interval, variant } = payload
   const theme = plotTheme(isDark)
 
   const nSubplots = tracks.length + 1
-  const transcriptRow = nSubplots
+  const transcriptRow = transcriptPosition === 'top' ? 1 : nSubplots
+  let nLanes = 1 // Declare at the top
 
-  const rowHeights: number[] = tracks.map((t) =>
-    t.type === 'contact_map' ? 6 : t.type === 'sashimi' ? 2 : 1,
-  )
+  // --- Calculate row heights ---
+  const rowHeights: number[] = Array(nSubplots).fill(1)
+
+  for (let idx = 0; idx < tracks.length; idx++) {
+    const trackId = trackOrder[idx] ?? idx
+    const rowIndex = transcriptPosition === 'top'
+      ? idx + 1  // Tracks start at row 2 when transcript is at top
+      : idx      // Tracks start at row 1 when transcript is at bottom
+
+    if (collapsedTracks.has(trackId)) {
+      rowHeights[rowIndex] = 0.25
+    } else {
+      const t = tracks[idx]
+      rowHeights[rowIndex] = t.type === 'contact_map'
+        ? 6
+        : t.type === 'sashimi'
+          ? 2
+          : 1
+    }
+  }
+
   const xRange: [number, number] = [interval.start, interval.end]
-
   const data: unknown[] = []
   const shapes: unknown[] = []
   const annotations: unknown[] = []
 
-  // Build track objects
   let shownContinuousLegend = false
+
+  // --- Build track data ---
   for (let idx = 0; idx < tracks.length; idx++) {
     const spec = tracks[idx]
-    const row = idx + 1
+    const row = transcriptPosition === 'top'
+      ? idx + 2  // Tracks start at row 2
+      : idx + 1  // Tracks start at row 1
 
     if (spec.type === 'continuous') {
-      data.push(...buildContinuousTraces(spec, row, !shownContinuousLegend))
+      data.push(
+        ...buildContinuousTraces(spec, row, !shownContinuousLegend),
+      )
       shownContinuousLegend = true
     } else if (spec.type === 'sashimi') {
       const result = buildSashimiObjects(spec, row, theme)
@@ -295,8 +320,7 @@ export function buildTrackFigure(
     }
   }
 
-  // Transcript track
-  let nLanes = 1
+  // --- Build transcript data ---
   if (transcripts?.length) {
     const tx = buildTranscriptObjects(
       transcripts,
@@ -309,10 +333,14 @@ export function buildTrackFigure(
     annotations.push(...tx.annotations)
     nLanes = tx.nLanes
   }
-  rowHeights[transcriptRow - 1] = Math.max(1, (nLanes - 1) * TRACK_SPACING + 2 * TRACK_PAD)
+
+  // Set transcript row height AFTER we know nLanes
+  rowHeights[transcriptRow - 1] = transcripts?.length
+    ? Math.max(1, (nLanes - 1) * TRACK_SPACING + 2 * TRACK_PAD)
+    : 1
+
   const totalHeight = rowHeights.reduce((a, b) => a + b, 0)
 
-  // Configure axes
   const layout: Record<string, unknown> = themedLayout(theme, {
     height: 500 + 120 * totalHeight,
     hovermode: 'x unified',
@@ -322,36 +350,74 @@ export function buildTrackFigure(
       y: 1.02,
       xanchor: 'right',
       x: 1,
-      title: { text: 'Click to toggle:', side: 'left', font: { size: 11, color: theme.muted } },
+      title: {
+        text: 'Click to toggle:',
+        side: 'left',
+        font: { size: 11, color: theme.muted },
+      },
     },
     shapes,
     annotations,
     hoverlabel: themedHoverLabel(theme),
-    margin: { l: 60, r: 30, t: 40, b: 60 },
-  
+    margin: { l: 50, r: 100, t: 40, b: 60 },
   })
 
   const domains = makeDomains(rowHeights)
 
+  // --- Build axes and annotations ---
   for (let row = 1; row <= nSubplots; row++) {
+    const isTrackRow = row !== transcriptRow && row <= nSubplots
+    const isTranscriptRow = row === transcriptRow && transcripts?.length
+
     const xAxis = makeXAxis(
       row,
       xRange,
       row === nSubplots,
       theme,
-      row <= tracks.length ? tracks[row - 1] : undefined,
+      isTrackRow ? tracks[transcriptPosition === 'top' ? row - 2 : row - 1] : undefined,
     )
-    if (row === transcriptRow && transcripts?.length) {
+
+    if (isTranscriptRow) {
       xAxis.title = { text: 'Transcripts', standoff: 10 }
     }
+
     layout[xKey(row)] = xAxis
 
-    if (row <= tracks.length) {
+    if (isTrackRow) {
+      const trackIdx = transcriptPosition === 'top' ? row - 2 : row - 1
+      const position = transcriptPosition === 'top' ? row - 1 : row  // Track position (1-based)
       layout[yKey(row)] = {
-        ...makeYAxis(row, theme, tracks[row - 1]),
+        ...makeYAxis(row, theme, tracks[trackIdx]),
         domain: domains[row - 1],
       }
-    } else if (row === transcriptRow && transcripts?.length) {
+      annotations.push({
+        xref: 'paper',
+        yref: `${yRef(row)} domain`,
+        x: 1.05,
+        y: 0.82,
+        text: '▲',
+        showarrow: false,
+        font: { size: 14, color: theme.muted },
+        captureevents: true,
+        name: `move-up-${position}`,  // Use position, not row
+        hovertext: 'Move track up',
+        xanchor: 'left',
+        opacity: position === 1 ? 0.3 : 1, 
+      }, {
+        xref: 'paper',
+        yref: `${yRef(row)} domain`,
+        x: 1.05,
+        y: 0.18,
+        text: '▼',
+        showarrow: false,
+        font: { size: 14, color: theme.muted },
+        captureevents: true,
+        name: `move-down-${position}`,  // Use position, not row
+        hovertext: 'Move track down',
+        xanchor: 'left',
+        opacity: position === tracks.length ? 0.3 : 1, 
+      })
+    } else if (isTranscriptRow) {
       layout[yKey(row)] = {
         ...themedAxis(theme),
         anchor: xRef(row),
@@ -361,6 +427,38 @@ export function buildTrackFigure(
         range: [-(nLanes - 1) * TRACK_SPACING - TRACK_PAD, TRACK_PAD],
         domain: domains[row - 1],
       }
+
+      // Add move to top/bottom buttons for transcript
+      annotations.push(
+        {
+          xref: 'paper',
+          yref: `${yRef(row)} domain`,
+          x: 1.05,
+          y: 0.82,
+          text: '↑↑',
+          showarrow: false,
+          font: { size: 12, color: theme.muted },
+          captureevents: true,
+          name: `transcript-to-top`,
+          hovertext: 'Move to top',
+          xanchor: 'left',
+          opacity: transcriptPosition === 'top' ? 0.3 : 1,
+        },
+        {
+          xref: 'paper',
+          yref: `${yRef(row)} domain`,
+          x: 1.05,
+          y: 0.18,
+          text: '↓↓',
+          showarrow: false,
+          font: { size: 12, color: theme.muted },
+          captureevents: true,
+          name: `transcript-to-bottom`,
+          hovertext: 'Move to bottom',
+          xanchor: 'left',
+          opacity: transcriptPosition === 'bottom' ? 0.3 : 1,
+        }
+      )
     } else {
       layout[yKey(row)] = {
         ...makeYAxis(row, theme),
@@ -369,33 +467,26 @@ export function buildTrackFigure(
     }
   }
 
-  // Variant marker line on every subplot
+  // --- Variant line and label ---
   const variantPos = variant.position
   for (let row = 1; row <= nSubplots; row++) {
     shapes.push({
       type: 'line',
       xref: xRef(row),
       yref: `${yRef(row)} domain`,
-      x0: variantPos,
-      x1: variantPos,
-      y0: 0,
-      y1: 1,
+      x0: variantPos, x1: variantPos,
+      y0: 0, y1: 1,
       line: { dash: 'dash', color: theme.fg, width: 1 },
     })
   }
 
-  // Variant label at top
   annotations.push({
-    x: variantPos,
-    y: 1,
-    xref: xRef(1),
-    yref: `${yRef(1)} domain`,
+    x: variantPos, y: 1,
+    xref: xRef(1), yref: `${yRef(1)} domain`,
     text: `Variant: ${variant.label}`,
     showarrow: false,
-    xanchor: 'left',
-    yanchor: 'top',
-    xshift: 4,
-    yshift: -4,
+    xanchor: 'left', yanchor: 'top',
+    xshift: 4, yshift: -4,
     font: { size: 10, color: theme.fg },
   })
 
