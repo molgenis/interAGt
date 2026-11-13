@@ -31,7 +31,7 @@ export function ModelSwitch({
         aria-label={`AlphaGenome version: ${isAg2 ? '2' : '1'}`}
         title="AlphaGenome version"
         onClick={toggle}
-        className="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full bg-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        className="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
       >
         <span
           className={`inline-block size-4 rounded-full bg-background shadow transition-transform ${
