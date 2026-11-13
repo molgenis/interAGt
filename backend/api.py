@@ -9,6 +9,7 @@ from backend import services
 from backend.core import UpstreamServiceError
 from backend.schemas import (
     HpoTermsResponse,
+    ModelVersionsResponse,
     NormalizeRequest,
     NormalizeResponse,
     OntologyTermsRequest,
@@ -50,6 +51,11 @@ def organisms() -> dict:
     return {"organisms": services.get_organisms()}
 
 
+@metadata_router.get("/models", response_model=ModelVersionsResponse)
+def models() -> dict:
+    return {"models": services.get_model_versions()}
+
+
 @metadata_router.get("/hpo-terms", response_model=HpoTermsResponse)
 def hpo_terms() -> dict:
     return {"terms": services.get_hpo_terms()}
@@ -58,24 +64,32 @@ def hpo_terms() -> dict:
 @metadata_router.post("/ontology-terms", response_model=OntologyTermsResponse)
 def ontology_terms(payload: OntologyTermsRequest) -> dict:
     curie_to_label, display_options = services.load_ontology_terms(
-        payload.api_key, payload.organism
+        payload.api_key, payload.organism, payload.model_version
     )
-    return {"curie_to_label": curie_to_label, "display_options": display_options}
+    descriptions = (
+        services.load_condition_descriptions(payload.api_key, payload.organism)
+        if services.get_model_spec(payload.model_version).uses_conditions
+        else {}
+    )
+    return {
+        "curie_to_label": curie_to_label,
+        "display_options": display_options,
+        "descriptions": descriptions,
+    }
 
 
 @metadata_router.post("/tracks", response_model=TracksResponse)
 def tracks(payload: TracksRequest) -> dict:
-    track_map = services.load_tracks(payload.api_key, payload.organism)
-
-    default_selection = [
-        track for track in services.DEFAULT_TRACK_SELECTION if track in track_map
-    ]
+    version = payload.model_version
+    track_map = services.load_tracks(payload.api_key, payload.organism, version)
 
     return {
         "tracks": list(track_map.keys()),
-        "default_selection": default_selection,
-        "excluded_from_visualization": services.EXCLUDED_VISUALIZATION_TRACKS,
-        "available_scorers": services.get_available_scorers(payload.organism, track_map.keys()),
+        "default_selection": services.get_default_track_selection(track_map, version),
+        "excluded_from_visualization": services.get_excluded_visualization_tracks(version),
+        "available_scorers": services.get_available_scorers(
+            payload.organism, track_map.keys(), version
+        ),
     }
 
 
@@ -110,8 +124,9 @@ def normalize(payload: NormalizeRequest) -> NormalizeResponse:
 
 @variants_router.post("/score", response_model=ScoreResponse)
 def score(payload: ScoreRequest) -> dict:
-    model = services.get_model(payload.api_key)
-    organism = services.resolve_organism(payload.organism)
+    version = payload.model_version
+    model = services.get_model(payload.api_key, version)
+    organism = services.resolve_organism(payload.organism, version)
 
     df_scores = services.score_variant(
         model=model,
@@ -119,6 +134,9 @@ def score(payload: ScoreRequest) -> dict:
         variant_str=payload.variant,
         sequence_length=payload.sequence_length,
         scorer_names=payload.scorers,
+        model_version=version,
+        conditions=payload.conditions,
+        imputation_policy=payload.imputation,
     )
 
     sort_column = services.default_sort_column(df_scores)
@@ -152,11 +170,17 @@ plots_router = APIRouter()
 
 @plots_router.post("/tracks", response_model=TracksPlotResponse)
 def tracks_plot(payload: TracksPlotRequest) -> dict:
-    model = services.get_model(payload.api_key)
-    organism = services.resolve_organism(payload.organism)
+    version = payload.model_version
+    model = services.get_model(payload.api_key, version)
+    organism = services.resolve_organism(payload.organism, version)
     organism_label = services.get_organism_label(payload.organism)
 
-    track_map = services.load_tracks(payload.api_key, payload.organism)
+    track_map = services.load_tracks(payload.api_key, payload.organism, version)
+    condition_labels: dict[str, str] = {}
+    if services.get_model_spec(version).uses_conditions:
+        condition_labels, _ = services.load_ontology_terms(
+            payload.api_key, payload.organism, version
+        )
 
     transcript_warning: str | None = None
     try:
@@ -178,6 +202,9 @@ def tracks_plot(payload: TracksPlotRequest) -> dict:
         selected_tracks=payload.tracks,
         track_map=track_map,
         transcript_extractor=transcript_extractor,
+        model_version=version,
+        imputation_policy=payload.imputation,
+        condition_labels=condition_labels,
     )
     result["transcript_warning"] = transcript_warning
     return result

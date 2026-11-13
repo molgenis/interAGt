@@ -50,6 +50,9 @@ const CHART_SPEC: Record<string, ChartSpec> = {
   PROCAP: { facet: 'track_strand', identity: ['track_name'] },
   SPLICE_SITES: { facet: 'track_name', identity: [] },
   CHIP_TF: { facet:'transcription_factor', identity:['genetically_modified'] },
+  METHYLATION: { identity: ['track_name'] },
+  SC_ATAC: { identity: ['track_name'] },
+  SC_GENE_EXPRESSION: { facet: 'gene_name', identity: ['track_name'] },
   SPLICE_JUNCTIONS: { identity: ['junction_Start', 'junction_End', 'Assay title'] },
   CONTACT_MAPS: { identity: ['track_name', 'Assay title'] },
 }

@@ -29,6 +29,10 @@ By inputting a variant, researchers can:
 - Select from **ontology-annotated tissues/cell types** (e.g., `UBERON:0002048` for lung)
 - **No coding required**: Access cutting-edge predictions through a user-friendly interface
 
+**Model choice.** A switch in the sidebar selects the model:
+- **AlphaGenome 2 (default):** predicts for one reference condition (tissue, cell type or cell line) per call, so each selected condition is a separate prediction; adds DNA methylation and single-cell (scATAC, scRNA) outputs; labels every track `observed`, `imputed_supported` or `imputed_exploratory` (only observed tracks are shown unless you include imputations); returns `raw_score` only.
+- **AlphaGenome 1:** predicts across all selected tissues in one call, includes PRO-cap, and gives `quantile_score` for human variants.
+
 
 ## **References**
 - Žiga Avsec, Natasha Latysheva, Jun Cheng, *et al.* **Advancing regulatory variant effect prediction with AlphaGenome.** *Nature*, 649(8099):1206–1218, 2026. [DOI:10.1038/s41586-025-10014-0](https://doi.org/10.1038/s41586-025-10014-0)

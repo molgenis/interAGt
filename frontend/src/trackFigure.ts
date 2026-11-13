@@ -33,9 +33,15 @@ function subplotTitle(spec: TrackSpec): string {
   return [
     track_name,
     metadata.name ?? '',
-    metadata.biosample_name ?? '',
+    metadata.condition_label ?? metadata.biosample_name ?? '',
     metadata.strand ? `strand: ${metadata.strand}` : '',
-  ].join(' | ')
+    // AG2 only: flag tracks the model imputed rather than learned from data.
+    metadata.imputation_mode && metadata.imputation_mode !== 'observed'
+      ? metadata.imputation_mode.replace('_', ' ')
+      : '',
+  ]
+    .filter(Boolean)
+    .join(' | ')
 }
 
 // --- Trace factories ---
@@ -194,10 +200,18 @@ function buildContactMapTrace(spec: ContactMapTrack, row: number): unknown {
   }
 }
 
-// --- Domains for controlling subplot height 
+// --- Domains for controlling subplot height
+// Gaps between rows (room for each row's title) are capped at 25% of the
+// figure in total. A fixed per-row gap overflowed past ~50 rows: the gaps
+// alone exceeded the figure height and every subplot collapsed onto the
+// transcripts row.
+const ROW_GAP = 0.02
+const MAX_TOTAL_GAP = 0.25
+
 function makeDomains(weights: number[]) {
   const total = weights.reduce((a, b) => a + b, 0)
-  const gap = 0.02
+  const gap =
+    weights.length > 1 ? Math.min(ROW_GAP, MAX_TOTAL_GAP / (weights.length - 1)) : 0
 
   let top = 1
 

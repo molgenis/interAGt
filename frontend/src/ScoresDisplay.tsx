@@ -10,6 +10,7 @@ import { Checkbox } from '@/ui/checkbox'
 import { Button } from '@/ui/button'
 
 const PREFERRED_COLUMNS = [
+  'condition',
   'output_type',
   'gene_name',
   'gene_id',
@@ -17,6 +18,7 @@ const PREFERRED_COLUMNS = [
   'transcription_factor',
   'histone_mark',
   'track_strand',
+  'imputation_mode',
   'raw_score',
   'quantile_score',
   'hpo_gene_relevance',
