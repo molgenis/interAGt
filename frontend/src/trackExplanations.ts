@@ -3,7 +3,7 @@ export type TrackExplanations = Record<string, string>
 // Shown above the "All results" table in Scores mode. Not part of either
 // map above since it describes the table as a whole, not a per-scorer row.
 export const ALL_RESULTS_EXPLANATION =
-  'Every scored row across your selected scorers, sorted by HPO-gene relevance first then by quantile_score (only available for Human) and if unavailable by raw_score. Only a subset of columns is shown by default; use the Columns button above the table to add more, and hover any header for its definition. Because some columns are hidden by default, rows can look identical here while differing in a column that isn\'t shown (e.g. distinct splice junctions or RNA-seq protocols); the CSV download always includes every column.'
+  'Every scored row across your selected scorers, sorted by HPO-gene relevance first then by quantile_score (AlphaGenome 1, Human only) and if unavailable by raw_score. AlphaGenome 2 returns raw_score only, with one block of rows per selected condition. Only a subset of columns is shown by default; use the Columns button above the table to add more, and hover any header for its definition. Because some columns are hidden by default, rows can look identical here while differing in a column that isn\'t shown (e.g. distinct splice junctions or RNA-seq protocols); the CSV download always includes every column.'
 
 export const TRACK_EXPLANATIONS: TrackExplanations = {
   RNA_SEQ:
@@ -26,6 +26,12 @@ export const TRACK_EXPLANATIONS: TrackExplanations = {
     'Quantifies the usage of splice sites. High scores indicate frequent splicing at this site. Variants may reduce usage, causing aberrant splicing or intron retention. Rendered as a continuous line track, but the y-axis is a bounded usage fraction (0-1), not a read-depth-like coverage value.',
   SPLICE_JUNCTIONS:
     'Measures splicing between exons. High scores indicate strong exon-exon junctions. Variants may disrupt junctions, leading to mis-splicing or novel isoforms.',
+  METHYLATION:
+    'AlphaGenome 2 only. CpG DNA methylation level. Variants may create or destroy CpGs, or change methylation of nearby CpGs via altered TF binding or chromatin state.',
+  SC_ATAC:
+    'AlphaGenome 2 only. Single-cell ATAC-seq: chromatin accessibility for the selected cell type or state, learned from single-cell data.',
+  SC_GENE_EXPRESSION:
+    'AlphaGenome 2 only. Single-cell gene expression (protocol-specific, e.g. 10x 3\'). Gene-level rather than positional, so it is offered for scoring but not plotted as a track.',
   CONTACT_MAPS:
     'Differential contact maps (ALT vs REF) highlight predicted changes in chromatin interactions caused by the variant. Positive values indicate increased contact strength in the alternate allele, while negative values indicate decreased contact strength.',
 }
@@ -46,6 +52,12 @@ export const SCORER_EXPLANATIONS: TrackExplanations = {
     'Center-mask scorer: local histone-modification signal log2 fold-change in a wider 2001bp window centered on the variant. Signed.',
   CHIP_TF:
     'Center-mask scorer: local transcription-factor-binding signal log2 fold-change in a 501bp window centered on the variant. Signed.',
+  METHYLATION:
+    'AlphaGenome 2 only. Methylation scorer: change in predicted CpG methylation in a 1201bp window centered on the variant.',
+  SC_ATAC:
+    'AlphaGenome 2 only. Center-mask scorer: local single-cell chromatin-accessibility log2 fold-change in a window centered on the variant. Signed.',
+  SC_GENE_EXPRESSION:
+    'AlphaGenome 2 only. Gene-mask scorer: single-cell gene-expression log2 fold-change (ALT vs REF) for the selected condition. Signed: positive = increased expression.',
   Polyadenylation:
     "paQTL scorer: max log2 fold-change between proximal vs distal poly-A site usage, capturing alternative polyadenylation / 3'UTR shortening. Signed. Human only.",
   CONTACT_MAPS:
@@ -71,7 +83,13 @@ export const COLUMN_EXPLANATIONS: TrackExplanations = {
   raw_score:
     "The scorer's native output (log2 fold-change, mean, or L2 norm, depending on the scorer). Units differ per scorer, not comparable across track types.",
   quantile_score:
-    "raw_score's percentile rank against a genome-wide background of common human variants, computed per scorer and per track. Signed scorers map to [-1, 1] (0 = no change); unsigned scorers map to [0, 1]. Comparable across tracks, unlike raw_score. Default sort key for results.",
+    "AlphaGenome 1 only. raw_score's percentile rank against a genome-wide background of common human variants, computed per scorer and per track. Signed scorers map to [-1, 1] (0 = no change); unsigned scorers map to [0, 1]. Comparable across tracks, unlike raw_score. Default sort key for results.",
+  condition:
+    'AlphaGenome 2 only. The reference condition (tissue, cell type or cell line; one ontology CURIE or several joined by "_") this row was scored in.',
+  imputation_mode:
+    'AlphaGenome 2 only. observed = track measured in training data for this condition; imputed_supported = not measured but reliably imputable; imputed_exploratory = a hypothesis, use with care.',
+  biosample_curie:
+    'AlphaGenome 2 only. Ontology CURIE(s) of the biosample, "_"-delimited for composite conditions. Replaces AlphaGenome 1\'s ontology_curie.',
   hpo_gene_relevance:
     "App-computed, not from AlphaGenome: 1 if this row's gene is linked to one of your selected HPO terms. Used only to re-sort results (HPO-relevant rows first); it does not filter them.",
   gene_type: "GENCODE gene biotype, e.g. protein_coding, lncRNA, or miRNA.",

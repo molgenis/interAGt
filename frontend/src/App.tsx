@@ -10,7 +10,11 @@ import {
   useTrackPlot,
   loadApiKey,
   saveApiKey as persistApiKey,
+  loadModelVersion,
+  saveModelVersion,
   type ApiRequestError,
+  type ImputationPolicy,
+  type ModelVersion,
   type TrackIssue,
 } from '@/api'
 import { TRACK_EXPLANATIONS, SCORER_EXPLANATIONS, ALL_RESULTS_EXPLANATION } from '@/trackExplanations'
@@ -18,6 +22,7 @@ import { ApiKeyDialog } from '@/ApiKeyDialog'
 import { AboutDialog } from '@/AboutDialog'
 import { FAQDialog } from '@/FAQDialog'
 import { InfoTooltip } from '@/InfoTooltip'
+import { ModelSwitch } from '@/ModelSwitch'
 import { MultiSelect } from '@/MultiSelect'
 import { SeqLengthSelect, type SequenceLength } from '@/SeqLengthSelect'
 import { ScoresTable } from '@/ScoresDisplay'
@@ -51,6 +56,19 @@ const DEFAULT_ORGANISM_VALUE = 'HOMO_SAPIENS'
 const FALLBACK_ORGANISM_LABEL = 'Human (hg38)'
 
 type Mode = 'scores' | 'tracks'
+
+// AG2 labels every track observed / imputed_supported / imputed_exploratory.
+// Many conditions (e.g. single-cell-only cell types) have no measured bulk
+// RNA_SEQ/ATAC/CHIP_TF, so the default falls back to supported imputations
+// per condition and output type instead of returning nothing.
+const IMPUTATION_CHOICES: Record<ImputationPolicy, string> = {
+  auto: 'Best available (observed, else supported)',
+  observed: 'Observed only',
+  supported: 'Observed + supported imputations',
+  all: 'All, incl. exploratory imputations',
+}
+
+const MAX_CONDITIONS = 10
 
 function curieFromDisplay(display: string): string {
   const open = display.lastIndexOf('(')
@@ -130,6 +148,40 @@ function WarningsNote({
   )
 }
 
+function NotesNote({
+  notes,
+  onDismiss,
+}: {
+  notes: TrackIssue[]
+  onDismiss: () => void
+}) {
+  return (
+    <div
+      role="status"
+      className="relative rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 pr-8 text-sm"
+    >
+      <button
+        type="button"
+        onClick={onDismiss}
+        aria-label="Dismiss"
+        className="absolute right-2 top-2 rounded-sm opacity-70 hover:opacity-100"
+      >
+        <X className="size-4" />
+      </button>
+      <div className="font-medium">
+        {notes.length} note{notes.length === 1 ? '' : 's'} on the tracks shown
+      </div>
+      <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-xs text-muted-foreground">
+        {notes.map((n, i) => (
+          <li key={`${n.track}-${i}`}>
+            <span className="font-medium text-foreground">{n.track}:</span> {n.message}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 function TranscriptWarningNote({
   message,
   onDismiss,
@@ -152,23 +204,6 @@ function TranscriptWarningNote({
       </button>
       <div className="font-medium">Gene annotation row unavailable</div>
       <p className="mt-0.5 text-xs">{message}</p>
-    </div>
-  )
-}
-
-function MouseAnnotationWarning() {
-  return (
-    <div
-      role="alert"
-      className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-500"
-    >
-      <div className="font-medium">Mouse gene annotations may be misaligned</div>
-      <p className="mt-0.5 text-xs">
-        AlphaGenome's served mouse annotation file is coordinate-mismatched
-        (mm39 coordinates under an mm10 label), so transcript/gene models can
-        render offset from the actual signal in this track. AlphaGenome's
-        track and variant data are unaffected. See the FAQ for detail.
-      </p>
     </div>
   )
 }
@@ -199,6 +234,8 @@ export default function App() {
   const { theme, setTheme, isDark } = useTheme()
 
   const [apiKey, setApiKey] = useState('')
+  const [modelVersion, setModelVersion] = useState<ModelVersion>(loadModelVersion)
+  const [imputationChoice, setImputationChoice] = useState<ImputationPolicy>('auto')
   const [mode, setMode] = useState<Mode>('scores')
   const [organismValue, setOrganismValue] = useState(DEFAULT_ORGANISM_VALUE)
   const [variantInput, setVariantInput] = useState('')
@@ -212,6 +249,7 @@ export default function App() {
   const [selectedTracks, setSelectedTracks] = useState<string[]>([])
   const [pendingAction, setPendingAction] = useState<Mode | null>(null)
   const [warningsDismissed, setWarningsDismissed] = useState(false)
+  const [notesDismissed, setNotesDismissed] = useState(false)
   const [transcriptWarningDismissed, setTranscriptWarningDismissed] = useState(false)
 
   const organismsQuery = useOrganisms()
@@ -219,14 +257,24 @@ export default function App() {
   const currentOrganism = organisms.find((o) => o.value === organismValue)
   const organismLabel = currentOrganism?.label ?? FALLBACK_ORGANISM_LABEL
   const isHuman = organismLabel === FALLBACK_ORGANISM_LABEL
+  const isAg2 = modelVersion === 'ag2'
 
   const hpoTermsQuery = useHpoTerms(isHuman)
   const normalizationQuery = useVariantNormalization(variantInput, organismLabel)
-  const ontologyQuery = useOntologyTerms(apiKey, organismValue)
-  const tracksQuery = useTracks(apiKey, organismValue)
+  const ontologyQuery = useOntologyTerms(apiKey, organismValue, modelVersion)
+  const tracksQuery = useTracks(apiKey, organismValue, modelVersion)
 
   const scoreMutation = useVariantScores()
   const trackPlotMutation = useTrackPlot()
+
+  function handleModelChange(version: ModelVersion) {
+    if (version === modelVersion) return
+    setModelVersion(version)
+    saveModelVersion(version)
+    // Results from the other model would be mislabelled; clear them.
+    scoreMutation.reset()
+    trackPlotMutation.reset()
+  }
 
   function handleSaveApiKey(key: string) {
     setApiKey(key)
@@ -251,23 +299,32 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentOrganism?.value])
 
+  // Track/scorer sets differ per organism and model (e.g. PROCAP is AG1-only,
+  // METHYLATION AG2-only): drop selections the new set doesn't offer.
   useEffect(() => {
-    if (tracksQuery.data && selectedTracks.length === 0) {
-      setSelectedTracks(tracksQuery.data.default_selection)
-    }
+    const data = tracksQuery.data
+    if (!data) return
+    const kept = selectedTracks.filter((t) => data.tracks.includes(t))
+    setSelectedTracks(kept.length > 0 ? kept : data.default_selection)
+    const keptScorers = selectedScorers.filter((s: string) => data.available_scorers.includes(s))
+    setSelectedScorers(
+      keptScorers.length > 0 ? keptScorers : data.available_scorers.slice(0, 1),
+    )
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tracksQuery.data])
 
   useEffect(() => {
     if (trackPlotMutation.data) {
       setWarningsDismissed(false)
+      setNotesDismissed(false)
       setTranscriptWarningDismissed(false)
     }
   }, [trackPlotMutation.data])
 
+  // AG1 ontology terms and AG2 conditions are different lists.
   useEffect(() => {
     setSelectedTissues([]);
-  }, [organismValue]);
+  }, [organismValue, modelVersion]);
 
   const normalization = normalizationQuery.isValidating
     ? undefined
@@ -293,6 +350,7 @@ export default function App() {
     Boolean(apiKey) &&
     Boolean(normalizedVariant) &&
     selectedScorers.length > 0 &&
+    (!isAg2 || selectedTissues.length > 0) &&
     !scoreMutation.isPending &&
     !normalizationQuery.isValidating
   const canVisualize =
@@ -311,6 +369,9 @@ export default function App() {
       sequence_length: sequenceLength,
       scorers: selectedScorers,
       hpo_terms: isHuman ? selectedHpoTerms : [],
+      model_version: modelVersion,
+      conditions: isAg2 ? selectedTissues.map(curieFromDisplay) : [],
+      imputation: imputationChoice,
     })
   }
 
@@ -322,6 +383,8 @@ export default function App() {
       sequence_length: sequenceLength,
       ontology_terms: selectedTissues.map(curieFromDisplay),
       tracks: selectedTracks,
+      model_version: modelVersion,
+      imputation: imputationChoice,
     })
   }
 
@@ -362,6 +425,9 @@ export default function App() {
           An intuitive interface to AlphaGenome
         </span>
         <div className="ml-auto flex items-center gap-1">
+          <div className="mr-3">
+            <ModelSwitch value={modelVersion} onChange={handleModelChange} />
+          </div>
           <AboutDialog />
           <FAQDialog />
           <ThemeToggle theme={theme} setTheme={setTheme} />
@@ -534,17 +600,17 @@ export default function App() {
                     mode === 'scores' ? (
                       <>
                         Variant-effect scorers to run. Available scorers
-                        depend on the selected organism; PROCAP and
-                        Polyadenylation aren't available for Mouse, since
-                        AlphaGenome doesn't provide that data for this
-                        organism.
+                        depend on the selected model and organism.
+                        Polyadenylation (and, in AlphaGenome 1, PROCAP)
+                        isn't available for Mouse. METHYLATION and the
+                        single-cell scorers are AlphaGenome 2 only.
                       </>
                     ) : (
                       <>
                         Genomic signal tracks to plot. Available tracks
-                        depend on the selected organism; Mouse has no PROCAP
-                        track, since AlphaGenome doesn't provide that data
-                        for this organism.
+                        depend on the selected model and organism. PROCAP is
+                        AlphaGenome 1 only (human); METHYLATION and SC_ATAC
+                        are AlphaGenome 2 only.
                       </>
                     )
                   }
@@ -588,19 +654,34 @@ export default function App() {
               </div>
             )}
 
-            {mode === 'tracks' && (
+            {(mode === 'tracks' || isAg2) && (
               <div className="grid gap-2">
                 <div className="flex items-center gap-2">
-                  <Label htmlFor="tissues">Tissues (max. 10)</Label>
+                  <Label htmlFor="tissues">
+                    {isAg2 ? 'Conditions' : 'Tissues'} (max. {MAX_CONDITIONS})
+                  </Label>
                   <InfoTooltip
                     content={
-                      <>
-                        Each option's prefix names its ontology: UBERON
-                        (anatomical structure), CL (cell type), CLO (cell
-                        line), EFO (assay/experimental context), NTR
-                        (not-yet-formalized term). The 10-tissue cap is a UI
-                        choice, not an AlphaGenome limit.
-                      </>
+                      isAg2 ? (
+                        <>
+                          AlphaGenome 2 predicts for one reference condition
+                          at a time, so each condition you add is a separate
+                          prediction (and API call). A condition is one
+                          ontology term (UBERON tissue, CL cell type, CLO
+                          cell line, …) or several joined by "_". Hover an
+                          option to see which outputs were measured there and
+                          which are imputed. The cap of{' '}
+                          {MAX_CONDITIONS} is a UI choice.
+                        </>
+                      ) : (
+                        <>
+                          Each option's prefix names its ontology: UBERON
+                          (anatomical structure), CL (cell type), CLO (cell
+                          line), EFO (assay/experimental context), NTR
+                          (not-yet-formalized term). The 10-tissue cap is a UI
+                          choice, not an AlphaGenome limit.
+                        </>
+                      )
                     }
                   />
                 </div>
@@ -609,8 +690,9 @@ export default function App() {
                   options={tissueOptions}
                   selected={selectedTissues}
                   onChange={setSelectedTissues}
-                  placeholder="Search & select tissues…"
-                  maxSelected={10}
+                  placeholder={isAg2 ? 'Search & select conditions…' : 'Search & select tissues…'}
+                  descriptions={ontologyQuery.data?.descriptions}
+                  maxSelected={MAX_CONDITIONS}
                   disabled={tissueOptions.length === 0}
                 />
                 {ontologyQuery.isError && (
@@ -618,6 +700,44 @@ export default function App() {
                     {(ontologyQuery.error as Error).message}
                   </p>
                 )}
+              </div>
+            )}
+
+            {isAg2 && (
+              <div className="grid gap-2">
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="imputation">Imputed tracks</Label>
+                  <InfoTooltip
+                    content={
+                      <>
+                        AlphaGenome 2 returns every track for a condition and
+                        labels each one: observed (measured in training),
+                        imputed_supported (not measured, but reliably
+                        imputable) or imputed_exploratory (a hypothesis;
+                        use with care). "Best available" shows observed
+                        tracks where they exist and otherwise the supported
+                        imputations, per condition and track type. Plots
+                        show at most 25 tracks per track type and condition,
+                        most reliable first.
+                      </>
+                    }
+                  />
+                </div>
+                <Select
+                  value={imputationChoice}
+                  onValueChange={(v) => setImputationChoice(v as ImputationPolicy)}
+                >
+                  <SelectTrigger id="imputation">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(Object.keys(IMPUTATION_CHOICES) as ImputationPolicy[]).map((key) => (
+                      <SelectItem key={key} value={key}>
+                        {IMPUTATION_CHOICES[key]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             )}
           </div>
@@ -699,7 +819,9 @@ export default function App() {
                 title={apiKey ? 'No scores yet' : 'API key required'}
                 hint={
                   apiKey
-                    ? 'Pick your scorers and run “Get variant scores” to see per-tissue effects here.'
+                    ? isAg2
+                      ? 'Pick your scorers and conditions, then run “Get variant scores” to see per-condition effects here.'
+                      : 'Pick your scorers and run “Get variant scores” to see per-tissue effects here.'
                     : 'Add your AlphaGenome API key from the header to get started.'
                 }
               />
@@ -712,17 +834,24 @@ export default function App() {
             />
           ) : trackPayload ? (
             <div className="space-y-4">
-              {!isHuman && <MouseAnnotationWarning />}
               {!transcriptWarningDismissed && trackPayload.transcript_warning && (
                 <TranscriptWarningNote
                   message={trackPayload.transcript_warning}
                   onDismiss={() => setTranscriptWarningDismissed(true)}
                 />
               )}
+              {!notesDismissed && (trackPayload.notes?.length ?? 0) > 0 && (
+                <NotesNote
+                  notes={trackPayload.notes ?? []}
+                  onDismiss={() => setNotesDismissed(true)}
+                />
+              )}
               {!warningsDismissed && trackPayload.warnings.length > 0 && (
                 <WarningsNote
                   warnings={trackPayload.warnings}
-                  total={selectedTracks.length}
+                  total={
+                    selectedTracks.length * (isAg2 ? Math.max(1, selectedTissues.length) : 1)
+                  }
                   onDismiss={() => setWarningsDismissed(true)}
                 />
               )}
@@ -746,7 +875,7 @@ export default function App() {
               title={apiKey ? 'No tracks yet' : 'API key required'}
               hint={
                 apiKey
-                  ? 'Select tissues and tracks, then run “Visualize” to render predictions around the variant.'
+                  ? `Select ${isAg2 ? 'conditions' : 'tissues'} and tracks, then run “Visualize” to render predictions around the variant.`
                   : 'Add your AlphaGenome API key from the header to get started.'
               }
             />

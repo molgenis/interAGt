@@ -23,6 +23,19 @@ export interface OrganismsResponse {
   organisms: OrganismItem[]
 }
 
+/** "ag2" = AlphaGenome 2 (default), "ag1" = AlphaGenome 1. */
+export type ModelVersion = 'ag1' | 'ag2'
+export const DEFAULT_MODEL_VERSION: ModelVersion = 'ag2'
+
+/** AG2 per-track label: measured in training, or imputed by the model. */
+export type ImputationMode = 'observed' | 'imputed_supported' | 'imputed_exploratory'
+
+/**
+ * AG2: which tracks to keep, per condition and output type.
+ * auto = observed where measured, otherwise supported imputations.
+ */
+export type ImputationPolicy = 'auto' | 'observed' | 'supported' | 'all'
+
 export interface HpoTermItem {
   term: string
   definition: string
@@ -35,6 +48,8 @@ export interface HpoTermsResponse {
 export interface OntologyTermsResponse {
   curie_to_label: Record<string, string>
   display_options: string[]
+  /** AG2: display option -> which outputs are observed/imputed there. */
+  descriptions?: Record<string, string>
 }
 
 export interface TracksResponse {
@@ -79,6 +94,12 @@ export interface TrackMetadata {
   biosample_name?: string
   strand?: string
   transcription_factor?: string
+  /** AG2 only. */
+  imputation_mode?: ImputationMode
+  /** AG2 only: the reference condition this track was predicted for. */
+  condition?: string
+  condition_label?: string
+  biosample_curie?: string
 }
 
 export interface ContinuousTrack {
@@ -153,6 +174,8 @@ export interface TrackPlotResponse {
   tracks: TrackSpec[]
   transcripts: TranscriptSpec[]
   warnings: TrackIssue[]
+  /** Tracks shown with a caveat (imputed fallback, capped track count). */
+  notes?: TrackIssue[]
   transcript_warning: string | null
 }
 
@@ -222,6 +245,30 @@ function post<T>(path: string, payload: unknown): Promise<T> {
 }
 
 const LOCAL_API_KEY_STORAGE = 'interagt-api-key'
+const LOCAL_MODEL_VERSION_STORAGE = 'interagt-model-version'
+
+export interface ScorePayload {
+  api_key: string
+  organism: string
+  variant: string
+  sequence_length: number
+  scorers: string[]
+  hpo_terms: string[]
+  model_version: ModelVersion
+  conditions: string[]
+  imputation: ImputationPolicy
+}
+
+export interface TrackPlotPayload {
+  api_key: string
+  organism: string
+  variant: string
+  sequence_length: number
+  ontology_terms: string[]
+  tracks: string[]
+  model_version: ModelVersion
+  imputation: ImputationPolicy
+}
 
 interface StoredApiKeyResponse {
   api_key: string | null
@@ -230,31 +277,24 @@ interface StoredApiKeyResponse {
 const api = {
   getOrganisms: () => request<OrganismsResponse>('/metadata/organisms'),
   getHpoTerms: () => request<HpoTermsResponse>('/metadata/hpo-terms'),
-  postOntologyTerms: (apiKey: string, organism: string) =>
+  postOntologyTerms: (apiKey: string, organism: string, modelVersion: ModelVersion) =>
     post<OntologyTermsResponse>('/metadata/ontology-terms', {
       api_key: apiKey,
       organism,
+      model_version: modelVersion,
     }),
-  postTracks: (apiKey: string, organism: string) =>
-    post<TracksResponse>('/metadata/tracks', { api_key: apiKey, organism }),
+  postTracks: (apiKey: string, organism: string, modelVersion: ModelVersion) =>
+    post<TracksResponse>('/metadata/tracks', {
+      api_key: apiKey,
+      organism,
+      model_version: modelVersion,
+    }),
   postNormalize: (variant: string, organism: string) =>
     post<NormalizeResponse>('/variants/normalize', { variant, organism }),
-  postScore: (payload: {
-    api_key: string
-    organism: string
-    variant: string
-    sequence_length: number
-    scorers: string[]
-    hpo_terms: string[]
-  }) => post<ScoreResponse>('/variants/score', payload),
-  postTrackPlot: (payload: {
-    api_key: string
-    organism: string
-    variant: string
-    sequence_length: number
-    ontology_terms: string[]
-    tracks: string[]
-  }) => post<TrackPlotResponse>('/plots/tracks', payload),
+  postScore: (payload: ScorePayload) =>
+    post<ScoreResponse>('/variants/score', payload),
+  postTrackPlot: (payload: TrackPlotPayload) =>
+    post<TrackPlotResponse>('/plots/tracks', payload),
   getStoredApiKey: () => request<StoredApiKeyResponse>('/keystore/api-key'),
   setStoredApiKey: (apiKey: string) =>
     post<StoredApiKeyResponse>('/keystore/api-key', { api_key: apiKey }),
@@ -284,6 +324,25 @@ export async function saveApiKey(key: string): Promise<void> {
   }
 }
 
+// ── Model version persistence ───────────────────────────────────────────────
+
+export function loadModelVersion(): ModelVersion {
+  try {
+    const stored = localStorage.getItem(LOCAL_MODEL_VERSION_STORAGE)
+    return stored === 'ag1' || stored === 'ag2' ? stored : DEFAULT_MODEL_VERSION
+  } catch {
+    return DEFAULT_MODEL_VERSION
+  }
+}
+
+export function saveModelVersion(version: ModelVersion): void {
+  try {
+    localStorage.setItem(LOCAL_MODEL_VERSION_STORAGE, version)
+  } catch {
+    // Storage unavailable (e.g. private mode): the choice lasts this session.
+  }
+}
+
 // ── Hooks ────────────────────────────────────────────────────────────────────
 
 export function useOrganisms() {
@@ -303,20 +362,24 @@ export function useHpoTerms(enabled: boolean) {
   })
 }
 
-export function useOntologyTerms(apiKey: string, organism: string) {
+export function useOntologyTerms(
+  apiKey: string,
+  organism: string,
+  modelVersion: ModelVersion,
+) {
   return useQuery({
-    queryKey: ['ontology-terms', organism, apiKey ? 'keyed' : 'empty'],
-    queryFn: () => api.postOntologyTerms(apiKey, organism),
+    queryKey: ['ontology-terms', modelVersion, organism, apiKey ? 'keyed' : 'empty'],
+    queryFn: () => api.postOntologyTerms(apiKey, organism, modelVersion),
     enabled: Boolean(apiKey) && Boolean(organism),
     retry: 1,
     staleTime: 5 * 60 * 1000,
   })
 }
 
-export function useTracks(apiKey: string, organism: string) {
+export function useTracks(apiKey: string, organism: string, modelVersion: ModelVersion) {
   return useQuery({
-    queryKey: ['tracks', organism, apiKey ? 'keyed' : 'empty'],
-    queryFn: () => api.postTracks(apiKey, organism),
+    queryKey: ['tracks', modelVersion, organism, apiKey ? 'keyed' : 'empty'],
+    queryFn: () => api.postTracks(apiKey, organism, modelVersion),
     enabled: Boolean(apiKey) && Boolean(organism),
     retry: 1,
     staleTime: 5 * 60 * 1000,
@@ -343,31 +406,9 @@ export function useVariantNormalization(
 }
 
 export function useVariantScores() {
-  return useMutation<
-    ScoreResponse,
-    Error,
-    {
-      api_key: string
-      organism: string
-      variant: string
-      sequence_length: number
-      scorers: string[]
-      hpo_terms: string[]
-    }
-  >({ mutationFn: (v) => api.postScore(v), retry: false })
+  return useMutation<ScoreResponse, Error, ScorePayload>({ mutationFn: (v) => api.postScore(v), retry: false })
 }
 
 export function useTrackPlot() {
-  return useMutation<
-    TrackPlotResponse,
-    ApiRequestError,
-    {
-      api_key: string
-      organism: string
-      variant: string
-      sequence_length: number
-      ontology_terms: string[]
-      tracks: string[]
-    }
-  >({ mutationFn: (v) => api.postTrackPlot(v), retry: false })
+  return useMutation<TrackPlotResponse, ApiRequestError, TrackPlotPayload>({ mutationFn: (v) => api.postTrackPlot(v), retry: false })
 }

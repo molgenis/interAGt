@@ -1,4 +1,4 @@
-alphagenome==0.7.0
+alphagenome==2.0.0
 fastapi==0.139.0
 keyring==25.7.0
 numpy==2.5.1
